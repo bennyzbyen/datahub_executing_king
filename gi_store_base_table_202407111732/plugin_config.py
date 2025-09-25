@@ -1,0 +1,101 @@
+ENV = 'PROD'
+# ENV = 'QA'
+
+if ENV == 'PROD':
+    app_key = "302e349c927af354672608e92543fe6e"
+    app_secret = "336456d2adfeaf0985dff89736ab48e6302e349c927af354672608e92543fe6e"
+    fs_root_dir = "/datahub/project_storage/gum_ndmr_indicator"
+    clickhouse_connect_params = {'CLICKHOUSE_HOST': '10.216.3.90',
+                                 'CLICKHOUSE_PORT': '8123',
+                                 'CLICKHOUSE_USER': 'gum_indicator',
+                                 'CLICKHOUSE_PASSWORD': 'D8j2$zVg3P',
+                                 'CLICKHOUSE_DB': 'sv_gum_indicator;supervisor_dashboard'}
+else:
+    # app_key = 'a3320dfe38b7888bcceb8a2d2cb85817'
+    # app_secret = '336456d2adfeaf0985dff89736ab48e6a3320dfe38b7888bcceb8a2d2cb85817'
+    app_key = "302e349c927af354672608e92543fe6e"
+    app_secret = "336456d2adfeaf0985dff89736ab48e6302e349c927af354672608e92543fe6e"
+    fs_root_dir = '/datahub/project_storage/gum_ndmr_indicator'
+    clickhouse_connect_params = {'CLICKHOUSE_HOST': '10.216.3.92',
+                                 'CLICKHOUSE_PORT': '8123',
+                                 'CLICKHOUSE_USER': 'gum_indicator',
+                                 'CLICKHOUSE_PASSWORD': 'D8j2$zVg3P',
+                                 'CLICKHOUSE_DB': 'sv_gum_indicator;supervisor_dashboard'}
+
+io_column_dict = {
+    'l0_cmt.geography': ['GeographyID', 'RegionCode', 'RegionName', 'ProvinceCode_G', 'ProvinceName_G',
+                         'CitygroupCode', 'CitygroupName', 'CityCode_G', 'CityName_G'],
+    'l0_cmt.customer': ['GeographyID', 'CustomerID', 'CustomerNo', 'CustomerName', 'CustomerGroupCode',
+                        'CustomerGroupName',
+                        'CustomerSegment', 'CustomerType', 'CustomerAttribute'],
+    'l0_cmt.geography_freeze': ['GeographyID', 'RegionCode', 'RegionName', 'ProvinceCode_G', 'ProvinceName_G',
+                                'CitygroupCode', 'CitygroupName', 'CityCode_G', 'CityName_G'],
+    'l0_cmt.customer_freeze': ['GeographyID', 'CustomerID', 'CustomerNo', 'CustomerName', 'CustomerGroupCode',
+                               'CustomerGroupName',
+                               'CustomerSegment', 'CustomerType', 'CustomerAttribute'],
+    'l0_cmt.calculate_sellout': ['Period', 'ProductID', 'SegmentID', 'CustomerID', 'GeographyID', 'Cust_GeographyID',
+                                 'SubSegmentID',
+                                 'CALCULATE_GSV', 'CALCULATE_CASE'],
+    'l0_cmt.sellout': ['P', 'SegmentID', 'CustomerID', 'Store_GeographyID', 'Cust_GeographyID', 'SelloutAmount',
+                       'SelloutVolumn'],
+    'l0_cmt.inventory': ['P_Freeze', 'SegmentID', 'CustomerID', 'GeographyID', 'Cust_GeographyID',
+                         'FINALINV_GSV', 'DateID'],
+    'l0_cmt.sellin': ['P_Freeze', 'ProductID', 'SegmentID', 'CustomerID', 'GeographyID', 'SubSegmentID',
+                      'Cust_GeographyID',
+                      'ShipmentAmount', 'ShipmentVolumn'],
+    'l0_mdp.mars_calendar': ["dataid", "year", "month", "m_year", "m_period", "m_week", "m_day", "day"],
+    'l0_cmt.segment': ['SegmentID', 'SegmentName'],
+    'l0_cmt.subSegment': ['SubSegmentID', 'SubSegmentName'],
+    'l0_cmt.product': ['ProductID', 'CHINA_FORECAST_GROUP_DESC', ],
+    'l2_cot_perfect_store.zo_all_p_2024': ['mars_region_code', 'mars_province_code', 'mars_city_cluster_code',
+                                           'mars_city_code',
+                                           'region_code', 'chain_brand_code', 'nation_hq_code', 'city_hq_code_visit',
+                                           'ka_type_code', 'channel_code', 'channel_level2_code', 'store_channel_code',
+                                           'rtm_channel_code', 'period', 'mars_region_name', 'mars_province_name',
+                                           'mars_city_cluster_name', 'mars_city_name', 'region_name',
+                                           'chain_brand_name',
+                                           'nation_hq_name', 'ka_type_name', 'store_level', 'city_hq_code',
+                                           'city_hq_name', 'rtm_channel_name', 'code', 'bd_env_name',
+                                           'store_name', 'channel_name', 'channel_level2_name', 'store_channel_name',
+                                           'store_level_visit', 'city_hq_name_visit', 'wal_mart', 'biz_scope',
+                                           'has_storefront', 'employee_type_name', 'employee_code', 'employee_name',
+                                           'salesman_code', 'salesman_name', 'supervisor_code', 'emp_channel_name',
+                                           'emp_type_name', 'supervisor_name', 'state', 'lbcx',
+                                           'store_cheetah', 'store_seg', 'digital', 'store_kk',
+                                           'manager_code', 'manager_name', 'mg_channel_name', 'mg_type_name',
+                                           'first_emp_supervisor_code', 'first_emp_supervisor_name',
+                                           'second_emp_supervisor_code', 'second_emp_supervisor_name',
+                                           'visit_date', 'is_assess', 'first_approved_timestamp', 'ttf',
+                                           'store_count_sys', 'is_last_visit', 'is_fixed_cover', 'visit_in_current_p',
+                                           'visit_uid'],
+    'l2_cot_perfect_store.zo_bysku_detail_2024_p': ['code', 'store_count_sys',
+                                                    'get_mh_sku_count_gum', 'get_mh_sku_count_choc',
+                                                    'get_mh_sku_count_mint', 'get_mh_sku_count_fc',
+                                                    'target_mh_sku_count_gum', 'target_mh_sku_count_choc',
+                                                    'target_mh_sku_count_mint', 'target_mh_sku_count_fc',
+                                                    'f2963', 'f3085', 'f3334', 'f6206',
+                                                    'f3317', 'f3072', 'f3084', 'f3082',
+                                                    'f3093', 'f3100', 'f3101', 'sale_resource',
+                                                    'f2962', 'f2994', 'f3328', 'f3151',
+                                                    'f3338', 'f3150', 'f2953', 'f3994',
+                                                    'f3112', 'f3052', 'f3003',
+                                                    'f3086', 'f2961', 'f2990', 'f2983',
+                                                    'f2984', 'f3142', 'f6702', 'f3130',
+                                                    'f5715', 'f6405',
+                                                    ],
+    'l2_cot_perfect_store.zo_cvs_detail_2024_p': ['code', 'wwy_manual_co_count', 'manual_co_count', 'wwy_self_co_count',
+                                                  'self_co_count', 'has_floor3_cover_num','dd_mars_floor3_cover','dining_mars_cover','drinks_mars_cover'],
+    'l2_cot_perfect_store.zo_minijy_detail_2024_p': ['code', 'wwy_manual_co_count', 'manual_co_count',
+                                                     'wwy_self_co_count',
+                                                     'self_co_count',
+                                                     'has_floor3_cover_num'],
+    'l2_cot_perfect_store.zo_proj_form_east_2024_p': ['hsp_field010', 'hsp_field061'],
+    'l2_cot_perfect_store.zo_proj_form_north_2024_p': ['hsp_field010', 'hsp_field062', 'hsp_field063',
+                                                       'mars_wrigley_otb_num', ],
+    'l2_cot_perfect_store.zo_proj_form_tt_2024_p': ['hsp_field010', 'co_mars_mw_open_rack'],
+    'l2_cot_perfect_store.zo_ps_all_detail_2024_p': ['code', 'sku_sale_offline_cal', 'sku_sale_offline_total'],
+    'l2_cot_perfect_store.zo_tt_detail_2024_p': ['code', 'store_count_sys', 'hexagon_layer_count',
+                                                 'aust_display_wwy_count',
+                                                 'aust_display_choc_count'],
+    'l2_cot_perfect_store.zo_ws_detail_2024_p': ['code', 'display_gum_sale_count_all']
+}

@@ -1,0 +1,28 @@
+import os
+import time
+import smtplib
+import datetime
+import traceback
+import numpy as np
+from loguru import logger
+from typing import Tuple, List, Dict, Optional
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.header import Header
+
+env = os.environ.get('running_env') or 'uat'
+logger.info(f"running env： {env}")
+
+
+# environment config
+if env == "uat":
+    App_key = "ef431e71ebca2ebd85f76fa3eb8c6007"
+    App_secret = "aa184b3b4d7181715323d52e205bb6eaef431e71ebca2ebd85f76fa3eb8c6007"
+    clickhouse_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJTOHc1Vm55b1piWnRlTmovNGIvRHkyYWxBZi8vVWZRT0FhTjBOTjNQbzRNTjU1OXMyb3RoOGU3ZjV4QlRuU0w5SUVnSVNhVmJVMFRrb2xtMVk5TklYNFZKY3dGSDJiVS9OUGhYanJwUkgzWkRzVlVCY1Y5MFlFSG9TVGl2TEFCTTBWOU04UnRLYmNuNzJ4NlpCWWJNcU94WStlVks5V3E3Z0ZrcXVSUEVqTklEQmlTa2Yva056LzlKQlhkMmMrWGVtcG9JMlJUL1pqdml5c2gyVWdmZGF3WHAzYktCTlZ1aDgvNU5vb250SFFFPSIsIm5iZiI6MTc0MDcyMTkyMiwiaXNzIjoid2F0dF9hbW1zX3VhdCIsImV4cCI6MTc3NDY3NzEyMiwiaWF0IjoxNzQwNzIyMDMwfQ.U0AYkwg1zCcN61C3xC5_mJlNyRi67rxCKZTGGzBEfBA"
+    cluster = ""
+
+elif env == "prod":
+    App_key = "2e1ec4de71f806c02e5c746e4a396a4b"
+    App_secret = "5371565d62db62fd54189153af5998e52e1ec4de71f806c02e5c746e4a396a4b"
+    clickhouse_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsS0xzd0t0eFFLcG9mMUJUeHlLZDhQNmQ5cWpwMGhzWU1rZDlUd0J6UFU2TmZodUFjYnVMVTZsbWxVeGNZUU5kbjJHdXJOZHRBZy9OSVU1b2FiUllhaWxPMS91bjhrbzJmL2dOOStXVnJmdTh5Y0lMSlMxK1l3c1hsdzFhK1BKWFF0V3FHUVhoNXBuLysyN2R1aWNxWU9kd0srZ0R5RGlMUEtma3BXWHNLbWJGUWNMZStWVE1UU21ZT25xQy9sV0tsUzVEdjhIOEhsRGR6bm13M0VETUxIU2pYRDIyS29kaVZaem56a1duR08wPSIsIm5iZiI6MTc0MTMzODQwMiwiaXNzIjoid2F0dF9hbW1zX3Byb2QiLCJleHAiOjE3Nzc1NDAwMDIsImlhdCI6MTc0MTMzODc5NX0.glry1X9BnKKmVbKyKJbn_jK5RbZ9y2zQREnesaepoto"
+    cluster = "cl_1shards_2replicas"
