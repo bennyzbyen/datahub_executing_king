@@ -103,6 +103,24 @@ class EXECUTE_KING(object):
         return df
     
 
+    def _delete_code(self, df_merge:pd.DataFrame)->pd.DataFrame:
+        hbase_op = HBaseOperation()
+        fs = hbase_op.fs_client
+        delete_code_list = fs.listdir(fs_save_dir)
+        df_total_delete_code = pd.DataFrame()
+        for delete_code_file in delete_code_list:
+            logger.info(delete_code_file)
+            fs.copy_to_local(f'{fs_save_dir}{delete_code_file}', delete_code_file)
+            df = pd.read_csv(delete_code_file, dtype=str)
+            df_total_delete_code = pd.concat([df_total_delete_code, df], ignore_index=True)
+            os.remove(delete_code_file)
+        df_total_delete_code = df_total_delete_code.drop_duplicates(subset=['code'])
+        logger.info(f"delete code size: {len(df_total_delete_code)}")
+        df_merge = df_merge[~df_merge['code'].isin(df_total_delete_code['code'].tolist())]
+
+        return df_merge
+    
+
     def _upload_2_ck(self, file_path:str, clickhouse_table:str, period:str):
         ck_op = CLickHouseOperation()
         ck_op.delete_by_partition(clickhouse_table,period)
@@ -130,6 +148,12 @@ class EXECUTE_KING(object):
 
             # 计算部分
             df_merge = self._col_calculate(df_merge)
+
+            # 剔除门店
+            if period_str > '2025P10':
+                df_merge = self._delete_code(df_merge)
+
+            # 保存结果
             df_merge.to_csv(output_path, index=False)
 
             # 上传clickhouse

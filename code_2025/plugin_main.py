@@ -1,8 +1,8 @@
 import sys
 import json
 from execute_king import EXECUTE_KING
-from all_configs.database_config import logger
-
+from all_configs.database_config import logger, os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 def calc_single(params:dict):

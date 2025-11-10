@@ -13,6 +13,7 @@ from email.header import Header
 env = os.environ.get('running_env') or 'uat'
 logger.info(f"running env： {env}")
 
+fs_save_dir = "/datahub/project_storage/execute_king_2025/execute_king_delete_code/"
 
 # environment config
 if env == "uat":
