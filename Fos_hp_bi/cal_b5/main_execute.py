@@ -7,11 +7,11 @@ from params_configs.db_config import env, app_key, app_secret, fs_save_calendar_
 
 
 class CAL_B5(object):
-    def __init__(self, params:dict):
+    def __init__(self, params:dict, current_date:str=None):
         self.params = params
         self.APP_KEY = app_key
         self.APP_SECRET = app_secret
-        self.current_date = params.get("current_date", None)
+        self.current_date = current_date
         self.calendar_file_path = "mars_calendar.csv"
         self.time_range = self.__get_execute_range()
         

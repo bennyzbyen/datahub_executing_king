@@ -2,12 +2,17 @@ from common_utils.all_modules import logger,json,sys,os
 from main_execute import CAL_NP
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-
 def main(params:dict):
     logger.info("---------params---------{}", params)
-
-    supervisor_portal = CAL_NP(params)
-    taks_result = supervisor_portal.execute()
+    date_list = params.get("date_list", None)
+    if date_list:
+        for current_date in date_list:
+            print(current_date)
+            supervisor_portal = CAL_NP(params, current_date)
+            taks_result = supervisor_portal.execute()
+    else:
+        supervisor_portal = CAL_NP(params)
+        taks_result = supervisor_portal.execute()
     
     return taks_result
 

@@ -311,7 +311,9 @@ class DataProcess:
         return result_df, result_df_ttl_combo
 
     def cal_sku(self, df:pd.DataFrame, r6p_sku_df:pd.DataFrame, new_sku_columns:list)->pd.DataFrame:
+        origin_columns = self.sku_columns
         sku_columns = list(new_sku_columns)
+        
         r3p_rename_dict = {col: f'{col}_r3p_temp' for col in sku_columns}
         r6p_rename_dict = {col: f'{col}_r6p_temp' for col in sku_columns}
 
@@ -356,6 +358,9 @@ class DataProcess:
 
         # 2025P10 新增cal_channel_category 渠道分类 & cal_store_channel_category 门店类型分类
         result_df_details = self._cal_channel_categories(result_df_details, is_sku=True)
+        
+        result_df_details[new_sku_columns] = result_df_details[new_sku_columns].astype(int)
+        result_df_details[origin_columns] = result_df_details[origin_columns].astype(int)
 
         return result_df_details
 

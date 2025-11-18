@@ -310,6 +310,8 @@ class DataProcess:
 
         # 2025P10 新增cal_channel_category 渠道分类 & cal_store_channel_category 门店类型分类
         result_df_details = self._cal_channel_categories(result_df_details, is_sku=True)
+        
+        result_df_details[sku_columns] = result_df_details[sku_columns].astype(int)
 
         return result_df_details
 

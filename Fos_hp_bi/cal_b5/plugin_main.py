@@ -5,9 +5,15 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 def main(params:dict):
     logger.info("---------params---------{}", params)
-
-    supervisor_portal = CAL_B5(params)
-    taks_result = supervisor_portal.execute()
+    date_list = params.get("date_list", None)
+    if date_list:
+        for current_date in date_list:
+            logger.info(current_date)
+            supervisor_portal = CAL_B5(params, current_date)
+            taks_result = supervisor_portal.execute()
+    else:
+        supervisor_portal = CAL_B5(params)
+        taks_result = supervisor_portal.execute()
     
     return taks_result
 
