@@ -48,7 +48,7 @@ class DataProcess:
         boolean_indicator = grouped_sum >= 1    
         sku_result = boolean_indicator.astype(int).reset_index()
 
-        sku_result['y8606'] = np.where((sku_result['y8606'] + sku_result['y7604']) > 0, 1, 0)
+        # sku_result['y8606'] = np.where((sku_result['y8606'] + sku_result['y7604']) > 0, 1, 0)
 
         logger.info(f"Finished calculating R6P")
         return sku_result
@@ -67,11 +67,11 @@ class DataProcess:
         condition4 = ~df['nation_hq_name'].isin(nation_hq_name_list)
 
         # 条件 ①: 最后一访为“1”（仅一级门店类型 = 现代渠道 且 RTM渠道 ≠ FT-Non KA 的门店有此过滤条件）
-        applicability_cond1 = (df['channel_name'] == '现代渠道') & (df['rtm_channel_name'] != 'FT-Non KA')
-        condition1 = (~applicability_cond1) | (df['is_last_visit'] == '1') # 如果不适用条件1，或者适用条件1且最后一访为1
+        # applicability_cond1 = (df['channel_name'] == '现代渠道') & (df['rtm_channel_name'] != 'FT-Non KA')
+        # condition1 = (~applicability_cond1) | (df['is_last_visit'] == '1') # 如果不适用条件1，或者适用条件1且最后一访为1
 
         # 结合所有过滤条件
-        final_filter = condition1 & condition2 & condition3 & condition4
+        final_filter = condition2 & condition3 & condition4
         df_filtered = df[final_filter].copy()
         
         logger.info(f"Filtered data shape: {df_filtered.shape}")

@@ -1,8 +1,8 @@
 # hbase初始化导出的表
-hbase_init_export_table = ["l2_cot_perfect_store.zo_bysku_detail_2025_p", "l2_cot_perfect_store.zo_bysku_detail_2024_p"]
+hbase_init_export_table = ["l2_cot_perfect_store.zo_bysku_detail_2026_p", "l2_cot_perfect_store.zo_bysku_detail_2025_p"]
 
 # hbase日常带出的表
-hbase_daily_export_table = "l2_cot_perfect_store.zo_bysku_detail_2025_p"
+hbase_daily_export_table = "l2_cot_perfect_store.zo_bysku_detail_2026_p"
 
 
 # hbase数据导出字段

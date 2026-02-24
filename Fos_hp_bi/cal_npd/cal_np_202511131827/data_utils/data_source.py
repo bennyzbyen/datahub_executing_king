@@ -1,6 +1,6 @@
-from common_utils.all_modules import pd, GateWayClient, Dict, mlpapp, logger
+from common_utils.all_modules import pd, GateWayClient, Dict, logger
 from params_configs.db_config import *
-from params_configs.col_config import source_table_name, hbase_export_range
+from params_configs.col_config import source_table_name
 
 
 class DataSource:
@@ -8,7 +8,7 @@ class DataSource:
         self.file_type = params.get('file_type', 'csv')
         self.sku_map = params['sku_map']
         self.sku_columns = list(self.sku_map.keys())
-        self.sku_cal_range = params['sku_cal_range']
+        self.sku_cal_range = params.get('sku_cal_range', None)
         self.APP_KEY = app_key
         self.APP_SECRET = app_secret
         self.FS_ROOT_DIR = fs_root_dir
@@ -42,40 +42,15 @@ class DataSource:
         return filtered_files
 
     @staticmethod
-    def read_csv_df(file_path: str, usecols: list = None) -> pd.DataFrame:
-        if usecols:
-            # 仅读取表头以获取实际存在的列
-            actual_header = pd.read_csv(file_path, nrows=0).columns.tolist()
-            # 取交集，保留文件中存在的列
-            valid_cols = [col for col in usecols if col in actual_header]
-            
-            df = pd.read_csv(file_path, dtype=str, usecols=valid_cols)
-            
-            # 补齐缺失的列，填充为 0（保持数据结构一致）
-            missing_cols = set(usecols) - set(valid_cols)
-            for col in missing_cols:
-                df[col] = "0"
-            return df
-        
-        return pd.read_csv(file_path, dtype=str)
+    def read_csv_df(file_path: str, usecols:list = None) -> pd.DataFrame:
+        return pd.read_csv(file_path, dtype=str, usecols=usecols)
     
-    @staticmethod
-    def read_gzip_df(file_path: str, usecols: list = None) -> pd.DataFrame:
-        if usecols:
-            # 仅读取表头
-            actual_header = pd.read_csv(file_path, compression='gzip', nrows=0).columns.tolist()
-            valid_cols = [col for col in usecols if col in actual_header]
-            
-            df = pd.read_csv(file_path, dtype=str, usecols=valid_cols, compression='gzip')
-            
-            # 补齐缺失的列
-            missing_cols = set(usecols) - set(valid_cols)
-            for col in missing_cols:
-                df[col] = "0"
-            return df
-            
-        return pd.read_csv(file_path, dtype=str, compression='gzip')
+    def read_pqrquet_df(self, file_path: str) -> pd.DataFrame:
+        return pd.read_parquet(file_path)
 
+    @staticmethod
+    def read_gzip_df(file_path: str, usecols:list = None)->pd.DataFrame:
+        return pd.read_csv(file_path, dtype=str, usecols=usecols, compression='gzip')
     
     def read_fs_2_df(self, fs_file_path: str, file_path: str, usecols:list = None) -> pd.DataFrame:
         file_type = self.file_type
@@ -124,7 +99,7 @@ class DataSource:
                 df = self.read_fs_2_df(fs_file_path, fs_file_name, usecols=['code']+sku_list)
                 df[sku_list] = df[sku_list].fillna(0)
                 logger.info(f"读取文件{fs_file_path}成功, size: {len(df)}")
-                df_sku = pd.concat([df_sku, df], ignore_index=True, axis=0)
+                df_sku = pd.concat([df_sku, df], ignore_index=True)
 
             df_comb = pd.concat([df_comb, df_sku], ignore_index=True)
         
@@ -136,7 +111,7 @@ class DataSource:
         file_type = self.file_type
         sku_columns = self.sku_columns
         current_period = time_range['period']
-
+        
         fs_file_name = f"{source_table_name}_{current_period}.{file_type}"
         fs_file_path = f"{fs_bysku_dir}/{fs_file_name}"
         df = self.read_fs_2_df(fs_file_path, fs_file_name)
@@ -151,7 +126,6 @@ class DataSource:
 
         df_origin = self.fetch_origin_df()
         df_sku = self.fetch_bysku_df()
-
 
         return df_origin, df_sku
         
