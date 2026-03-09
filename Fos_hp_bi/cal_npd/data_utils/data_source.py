@@ -42,11 +42,39 @@ class DataSource:
         return filtered_files
 
     @staticmethod
-    def read_csv_df(file_path: str, usecols:list = None) -> pd.DataFrame:
-        return pd.read_csv(file_path, dtype=str, usecols=usecols)
+    def read_csv_df(file_path: str, usecols: list = None) -> pd.DataFrame:
+        if usecols:
+            # 仅读取表头以获取实际存在的列
+            actual_header = pd.read_csv(file_path, nrows=0).columns.tolist()
+            # 取交集，保留文件中存在的列
+            valid_cols = [col for col in usecols if col in actual_header]
+            
+            df = pd.read_csv(file_path, dtype=str, usecols=valid_cols)
+            
+            # 补齐缺失的列，填充为 0（保持数据结构一致）
+            missing_cols = set(usecols) - set(valid_cols)
+            for col in missing_cols:
+                df[col] = "0"
+            return df
+        
+        return pd.read_csv(file_path, dtype=str)
     
-    def read_pqrquet_df(self, file_path: str) -> pd.DataFrame:
-        return pd.read_parquet(file_path)
+    @staticmethod
+    def read_gzip_df(file_path: str, usecols: list = None) -> pd.DataFrame:
+        if usecols:
+            # 仅读取表头
+            actual_header = pd.read_csv(file_path, compression='gzip', nrows=0).columns.tolist()
+            valid_cols = [col for col in usecols if col in actual_header]
+            
+            df = pd.read_csv(file_path, dtype=str, usecols=valid_cols, compression='gzip')
+            
+            # 补齐缺失的列
+            missing_cols = set(usecols) - set(valid_cols)
+            for col in missing_cols:
+                df[col] = "0"
+            return df
+            
+        return pd.read_csv(file_path, dtype=str, compression='gzip')
 
     @staticmethod
     def read_gzip_df(file_path: str, usecols:list = None)->pd.DataFrame:

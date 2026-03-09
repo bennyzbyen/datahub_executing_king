@@ -1,6 +1,5 @@
 from common_utils.all_modules import pd, threading, GateWayClient, Tuple, Dict, logger
 from params_configs.db_config import *
-from params_configs.col_config import hbase_init_export_table, hbase_daily_export_table
 
 
 class DataSource:
@@ -61,32 +60,19 @@ class DataSource:
         export_mode = params['export_mode']
         hbase_export_cols = params['hbase_export_cols']
         specific_range = params.get('specific_range', None)
-        specific_table = params.get('specific_table', None)
+        hbase_table = params.get('hbase_table', None)
         logger.info(f"Start {self.__class__.__name__}")
         
 
-        if export_mode == 'init':
-
-            if specific_range is not None and specific_table is not None:
-                # 指定时间的同时，也要指定表
-                period_list = specific_range
-                table_name = specific_table
-                self.fetch_hbase_tables_df_threaded(table_name=table_name, columns_to_export=hbase_export_cols, period_list=period_list)
-
-            else:
-                hbase_table_names = hbase_init_export_table
-                for table_name in hbase_table_names:
-                    logger.info(f"Exporting {table_name}")
-
-                    if table_name == 'l2_cot_perfect_store.zo_bysku_detail_2025_p':
-                        period_list = export_range['bysku2025_period']
-                    else:
-                        period_list = export_range['bysku2024_period']
-                    self.fetch_hbase_tables_df_threaded(table_name=table_name, columns_to_export=hbase_export_cols, period_list=period_list)
+        if export_mode == 'init' and specific_range is not None and hbase_table is not None:
+            # 指定时间的同时，也要指定表
+            period_list = specific_range
+            table_name = hbase_table
+            self.fetch_hbase_tables_df_threaded(table_name=table_name, columns_to_export=hbase_export_cols, period_list=period_list)
         
         elif export_mode == 'daily':
             period_list = [export_range['period']]
-            table_name = hbase_daily_export_table
+            table_name = hbase_table
             self.fetch_hbase_tables_df_threaded(table_name=table_name, columns_to_export=hbase_export_cols, period_list=period_list)
 
         logger.info(f"Finished {self.__class__.__name__}")

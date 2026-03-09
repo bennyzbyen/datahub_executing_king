@@ -1,5 +1,6 @@
 {
     "export_mode":"daily",
+    "hbase_table":"l2_cot_perfect_store.zo_bysku_detail_2026_p",
     "hbase_export_cols":[
         "period",
         "code",
@@ -73,6 +74,7 @@
         "store_count_sys",
         "visit_datetime",
         "visit_uid",
+        "yield_grade",
         "f8613",
         "f8603",
         "f8608",

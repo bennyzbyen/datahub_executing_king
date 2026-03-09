@@ -11,6 +11,11 @@ class EXECUTE_KING(object):
         self.table_mapping = params['table_mapping']
         self.column_mapping = params['column_mapping']
         self.table_list = params['source_table_list']
+        self.ext_table_name = params['ext_table_name']
+        self.ext_col_mapping = params.get('ext_col_mapping', None)
+        self.ext_table_columns = self.ext_col_mapping.keys()
+
+        self.ck_op = CLickHouseOperation()
 
 
     def get_execute_range(self, calendar_table = "l0_mdp.mars_calendar")->list:
@@ -122,7 +127,7 @@ class EXECUTE_KING(object):
     
 
     def _upload_2_ck(self, file_path:str, clickhouse_table:str, period:str):
-        ck_op = CLickHouseOperation()
+        ck_op = self.ck_op
         ck_op.delete_by_partition(clickhouse_table,period)
         ck_op.insert_to_clickhouse(file_path, clickhouse_table)
         try:
@@ -130,10 +135,82 @@ class EXECUTE_KING(object):
         except:
             pass
     
+    def _calculate_blacklist(self, df: pd.DataFrame, ext_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        根据给定的条件计算并生成 blacklist 字段
+        """
+        result_col = 'blacklist'
+        df[result_col] = 0
+        
+        # 条件 B：关键词匹配 (ole 或 blt，不区分大小写)
+        cond_b = df['store_name'].str.contains('ole|blt', case=False, na=False) | \
+                 df['city_hq_name'].str.contains('ole|blt', case=False, na=False)
+        df.loc[cond_b, result_col] = 1
+        
+        # 条件 A：关联匹配 (与外部数据比对)
+        base_keys = ['chain_brand_name', 'nation_hq_name', 'city_hq_name', 'code']
+        period_keys = ['period'] + base_keys
+        
+        # 1. 外部数据中 period 有值：使用 period + 基础字段 进行匹配
+        ext_with_p = ext_df[ext_df['period'].notna()][period_keys].drop_duplicates()
+        ext_with_p['__match__'] = 1
+        merged_p = df.merge(ext_with_p, on=period_keys, how='left')
+        df.loc[merged_p['__match__'] == 1, result_col] = 1
+        
+        # 2. 外部数据中 period 为空：仅使用 基础字段 进行降级匹配
+        ext_no_p = ext_df[ext_df['period'].isna()][base_keys].drop_duplicates()
+        ext_no_p['__match__'] = 1
+        merged_no_p = df.merge(ext_no_p, on=base_keys, how='left')
+        df.loc[merged_no_p['__match__'] == 1, result_col] = 1
+
+        return df
+    
+    def _fetch_ext_df(self, clickhouse_table:str, columns:list, ext_col_mapping:dict)->pd.DataFrame:
+        ck_op = self.ck_op
+        df = ck_op.fetch_ext_df(clickhouse_table, columns)
+        df = df.rename(columns=ext_col_mapping)
+        return 
+    
+    def _get_geo_map_data(self):
+        ck_op = self.ck_op
+        return ck_op._get_geo_map_data()
+    
+    def _enrich_geo_info(self, df: pd.DataFrame, df_geo: pd.DataFrame):
+        """
+        实现 SQL 的 EXCEPT 和 多字段 LEFT JOIN 逻辑。
+        """
+        if df is None or df_geo is None:
+            return df
+
+        # 1. EXCEPT 逻辑：移除已有的 _current 字段，确保数据源自维表映射
+        current_cols = [
+            'mars_region_code_current', 'mars_province_code_current', 
+            'mars_city_cluster_code_current', 'mars_city_code_current',
+            'mars_region_name_current', 'mars_province_name_current', 
+            'mars_city_cluster_name_current', 'mars_city_name_current'
+        ]
+        cols_to_drop = [c for c in current_cols if c in df.columns]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+
+        # 2. 定义多字段关联键
+        left_keys = ['mars_region_code', 'mars_province_code', 'mars_city_cluster_code', 'mars_city_code']
+        right_keys = ['mars_region_code_before', 'mars_province_code_before', 'mars_city_cluster_code_before', 'mars_city_code_before']
+
+        # 3. 执行 Left Join
+        df_enriched = df.merge(df_geo, left_on=left_keys, right_on=right_keys, how='left')
+
+        # 4. 清理维表带过来的 before 关联键字段，仅保留 current 结果
+        df_enriched.drop(columns=right_keys, inplace=True)
+
+        return df_enriched
 
 
     def execute_king(self, period_list:list, metrics_list:list, clickhouse_table:str, output_path:str)->dict:
         table_list = self.table_list
+        ext_table_name = self.ext_table_name
+        ex_table_columns = self.ext_table_columns
+        ext_col_mapping = self.ext_col_mapping
 
         for period_str in period_list:
             st = datetime.datetime.now()
@@ -152,6 +229,16 @@ class EXECUTE_KING(object):
             # 剔除门店
             if period_str > '2025P10':
                 df_merge = self._delete_code(df_merge)
+
+            # 剔除客户清单(HS+MC)
+            ext_df = self._fetch_ext_df(ext_table_name, ex_table_columns, ext_col_mapping)
+            logger.info(f"Start calculating blacklist")
+            df_merge = self._calculate_blacklist(df_merge, ext_df)
+            logger.info(f"Finished calculating blacklist")
+
+            # 拼接地域信息
+            df_geo = self._get_geo_map_data()
+            df_merge = self._enrich_geo_info(df_merge, df_geo)
 
             # 保存结果
             df_merge.to_csv(output_path, index=False)

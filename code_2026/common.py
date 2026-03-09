@@ -65,28 +65,27 @@ class ClientWrapper:
     def initialize_clickhouse_client(self, clickhouse_token):
         """初始化 ClickHouse 客户端 token"""
         try:
-            self.clickhouse_client = self.retry_ck_connection(5, 5, clickhouse_token)
+            if clickhouse_token != '':
+                client = self._retry_ck_connection(5, 5, clickhouse_token)
+            else:
+                client = clickhouse_connect.get_client(
+                    host=clickhouse_connect_params["CLICKHOUSE_HOST"],
+                    user=clickhouse_connect_params["CLICKHOUSE_USER"],
+                    password=clickhouse_connect_params["CLICKHOUSE_PASSWORD"],
+                    port=clickhouse_connect_params["CLICKHOUSE_PORT"],
+                    database=clickhouse_connect_params["CLICKHOUSE_DB"]
+                )
             logger.info("ClickHouse client initialized successfully.")
+            return client
         except Exception as e:
             logger.error(f"Error initializing ClickHouse client: {e}")
             raise
     
-    # def initialize_clickhouse_client(self, clickhouse_token):
-    #     """初始化 ClickHouse 客户端 账号密码"""
-    #     self.clickhouse_client = clickhouse_connect.get_client(
-    #             host=clickhouse_connect_params["CLICKHOUSE_HOST"],
-    #             user=clickhouse_connect_params["CLICKHOUSE_USER"],
-    #             password=clickhouse_connect_params["CLICKHOUSE_PASSWORD"],
-    #             port=clickhouse_connect_params["CLICKHOUSE_PORT"],
-    #             database=clickhouse_connect_params["CLICKHOUSE_DB"],
-    #             query_limit=0
-    #         )
-
-    def retry_ck_connection(self, max_retries, delay_minutes, token):
+    def _retry_ck_connection(self, max_retries, delay_minutes, token):
         retries = 0
         while retries < max_retries:
             try:
-                res_clickhouse = mlpapp.get_clickhouse_client(token)
+                res_clickhouse = mlpapp.get_clickhouse_client(app_key=App_key, app_secret=App_secret, env=env)
                 if res_clickhouse.get('successful') == False:
                     raise BaseException(res_clickhouse.get('err_message'))
                 clickhouse_client = res_clickhouse.get('object')

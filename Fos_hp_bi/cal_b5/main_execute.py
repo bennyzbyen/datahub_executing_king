@@ -79,7 +79,7 @@ class CAL_B5(object):
         ytd_list = [period for period in period_list if period.startswith(m_year)]
 
         ## bysku2025 period
-        bysku2025_index = period_list.index('2025P01') # 由于新需求需要P01开始，原本正常为2025P03
+        bysku2025_index = period_list.index('2025P09') # 由于新需求需要2025P09开始，之前为2025P01
         bysku2025_period = period_list[bysku2025_index:]
 
         ## bysku2024 period

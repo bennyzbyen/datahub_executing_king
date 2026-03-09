@@ -28,7 +28,43 @@ class CLickHouseOperation:
         clickhouse_client.command(sql)
         logger.info(f"{clickhouse_table}删除{partition}分区成功")
 
-
+    def fetch_ext_df(self, clickhouse_table, columns):
+        clickhouse_client = ClientWrapper(client_type='clickhouse', clickhouse_token='')
+        sql = f"SELECT {','.join(columns)} FROM {clickhouse_table};"
+        clickhouse_client = self.clickhouse_client.query_df(sql)
+        df = clickhouse_client
+        return df
+    
+    def _get_geo_map_data(self):
+        """
+        从 ClickHouse 读取地理映射维表。
+        包含 before (关联键) 和 current (目标字段)
+        """
+        client = ClientWrapper(client_type='clickhouse', clickhouse_token='')
+        source_cols = [
+            'mars_region_code_before', 'mars_province_code_before', 
+            'mars_city_cluster_code_before', 'mars_city_code_before',
+            'mars_region_code_current', 'mars_province_code_current', 
+            'mars_city_cluster_code_current', 'mars_city_code_current',
+            'mars_region_name_current', 'mars_province_name_current', 
+            'mars_city_cluster_name_current', 'mars_city_name_current'
+        ]
+        query = f"SELECT {', '.join(source_cols)} FROM sv_eo_data.mars_geo_map"
+        
+        try:
+            logger.info("Fetching mars_geo_map for multi-column enrichment...")
+            df_geo = client.query_df(query)
+            
+            # 关键：根据关联键去重，防止 Join 爆炸
+            join_keys_before = [
+                'mars_region_code_before', 'mars_province_code_before', 
+                'mars_city_cluster_code_before', 'mars_city_code_before'
+            ]
+            df_geo = df_geo.drop_duplicates(subset=join_keys_before)
+            return df_geo
+        except Exception as e:
+            logger.error(f"Error fetching geo map data: {e}")
+            return None
 
 class HBaseOperation:
     def __init__(self):

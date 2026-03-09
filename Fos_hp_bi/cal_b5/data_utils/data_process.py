@@ -21,7 +21,9 @@ class DataProcess:
         df = df[
             (df['channel_name'].isin(['现代渠道','传统渠道'])) &
             (df['channel_level2_name'] != '仓储式卖场') &
-            (df['mars_region_name'] != '总部订单大区')
+            (df['mars_region_name'] != '总部订单大区') &
+            # 以下为组合条件：排除【同时满足 FT-TT 和 低产店】的情况
+            ~((df['rtm_channel_code'] == 'FT-TT') & (df['yield_grade'] == '低产店'))
         ]
         df_origin = df[b5_detail_basic_columns+sku_columns]
 
