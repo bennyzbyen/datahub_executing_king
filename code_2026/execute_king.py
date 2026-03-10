@@ -152,16 +152,19 @@ class EXECUTE_KING(object):
         period_keys = ['period'] + base_keys
         
         # 1. 外部数据中 period 有值：使用 period + 基础字段 进行匹配
+        print(ext_df.head())
         ext_with_p = ext_df[ext_df['period'].notna()][period_keys].drop_duplicates()
         ext_with_p['__match__'] = 1
         merged_p = df.merge(ext_with_p, on=period_keys, how='left')
-        df.loc[merged_p['__match__'] == 1, result_col] = 1
+        # 修复点：添加 .values
+        df.loc[(merged_p['__match__'] == 1).values, result_col] = 1 
         
         # 2. 外部数据中 period 为空：仅使用 基础字段 进行降级匹配
         ext_no_p = ext_df[ext_df['period'].isna()][base_keys].drop_duplicates()
         ext_no_p['__match__'] = 1
         merged_no_p = df.merge(ext_no_p, on=base_keys, how='left')
-        df.loc[merged_no_p['__match__'] == 1, result_col] = 1
+        # 修复点：添加 .values
+        df.loc[(merged_no_p['__match__'] == 1).values, result_col] = 1
 
         return df
     
@@ -169,7 +172,8 @@ class EXECUTE_KING(object):
         ck_op = self.ck_op
         df = ck_op.fetch_ext_df(clickhouse_table, columns)
         df = df.rename(columns=ext_col_mapping)
-        return 
+        print(df.head())
+        return df
     
     def _get_geo_map_data(self):
         ck_op = self.ck_op

@@ -28,11 +28,18 @@ class CLickHouseOperation:
         clickhouse_client.command(sql)
         logger.info(f"{clickhouse_table}删除{partition}分区成功")
 
-    def fetch_ext_df(self, clickhouse_table, columns):
-        clickhouse_client = ClientWrapper(client_type='clickhouse', clickhouse_token='')
-        sql = f"SELECT {','.join(columns)} FROM {clickhouse_table};"
-        clickhouse_client = self.clickhouse_client.query_df(sql)
-        df = clickhouse_client
+    def fetch_ext_df(self, clickhouse_table, columns)->pd.DataFrame:
+        # 实例化包装类
+        wrapper = ClientWrapper(client_type='clickhouse', clickhouse_token='')
+        sql = f"SELECT {','.join(columns)} FROM sv_engine.{clickhouse_table}"
+        logger.info(f"sql:{sql}")
+        
+        # 增加一个安全检查
+        if wrapper.clickhouse_client is None:
+            raise RuntimeError("Clickhouse client is None. Initialization failed.")
+            
+        # 核心修改点：调用包装类内部真正的 clickhouse_client 去执行 query_df
+        df = wrapper.clickhouse_client.query_df(sql)
         return df
     
     def _get_geo_map_data(self):
@@ -40,7 +47,7 @@ class CLickHouseOperation:
         从 ClickHouse 读取地理映射维表。
         包含 before (关联键) 和 current (目标字段)
         """
-        client = ClientWrapper(client_type='clickhouse', clickhouse_token='')
+        wrapper = ClientWrapper(client_type='clickhouse', clickhouse_token='')
         source_cols = [
             'mars_region_code_before', 'mars_province_code_before', 
             'mars_city_cluster_code_before', 'mars_city_code_before',
@@ -53,7 +60,7 @@ class CLickHouseOperation:
         
         try:
             logger.info("Fetching mars_geo_map for multi-column enrichment...")
-            df_geo = client.query_df(query)
+            df_geo = wrapper.clickhouse_client.query_df(query)
             
             # 关键：根据关联键去重，防止 Join 爆炸
             join_keys_before = [

@@ -4,6 +4,8 @@
     "table_mapping" : {
         "l2_cot_perfect_store.zo_all_2026_p":
         [
+            "code", 
+            "period",
             "mars_region_code",
             "mars_province_code",
             "mars_city_cluster_code",
@@ -18,7 +20,6 @@
             "channel_level2_code",
             "store_channel_code",
             "rtm_channel_code",
-            "period",
             "mars_region_name",
             "mars_province_name",
             "mars_city_cluster_name",
@@ -29,7 +30,6 @@
             "ka_type_name",
             "city_hq_name",
             "city_hq_name_visit",
-            "code",
             "store_name",
             "channel_name",
             "channel_level2_name",
@@ -76,7 +76,9 @@
             "is_assess"
         ],
         "l2_cot_perfect_store.zo_bysku_detail_2026_p":
-        [
+        [   
+            "code", 
+            "period",
             "sale_resource",
             "get_mh_sku_count",
             "target_mh_sku_count",
@@ -93,6 +95,8 @@
         ],
         "l2_cot_perfect_store.zo_tt_detail_2026_p":
         [
+            "code", 
+            "period",
             "store_own_rack_gum_layer_num",
             "store_own_rack_choc_layer_num",
             "store_cus_rack_gum_layer_num",
@@ -129,6 +133,8 @@
         ],
         "l2_cot_perfect_store.zo_cvs_detail_2026_p":
         [
+            "code", 
+            "period",
             "all_choc_shelf_meter",
             "mars_choc_shelf_meter",
             "all_gum_shelf_meter",
@@ -157,6 +163,8 @@
         ],
         "l2_cot_perfect_store.zo_minijy_detail_2026_p":
         [
+            "code", 
+            "period",
             "ms_lv_rack",
             "ms_sh_rack",
             "ms_shaking_rack",
@@ -242,7 +250,7 @@
         "l2_cot_perfect_store.zo_cvs_detail_2026_p", 
         "l2_cot_perfect_store.zo_minijy_detail_2026_p"
     ],
-    "ext_table_name": "ds_c554efe5_7b3a_4763_a788_3e29536f0fa5",
+    "ext_table_name": "ds_f59ed231_e542_4ce6_bf34_f8bfeb15e774",
     "ext_col_mapping": {
         "C_3631c67c97b64bbc819f053e698b058d": "chain_brand_name",
         "C_bec97e47385a46a7add4d646dc50b18c": "nation_hq_name",

@@ -73,9 +73,13 @@ class ClientWrapper:
                     user=clickhouse_connect_params["CLICKHOUSE_USER"],
                     password=clickhouse_connect_params["CLICKHOUSE_PASSWORD"],
                     port=clickhouse_connect_params["CLICKHOUSE_PORT"],
-                    database=clickhouse_connect_params["CLICKHOUSE_DB"]
+                    database=clickhouse_connect_params["CLICKHOUSE_DB"],
+                    query_limit=0
                 )
             logger.info("ClickHouse client initialized successfully.")
+            
+            # 核心修改点：将连接对象赋值给类的属性
+            self.clickhouse_client = client 
             return client
         except Exception as e:
             logger.error(f"Error initializing ClickHouse client: {e}")
