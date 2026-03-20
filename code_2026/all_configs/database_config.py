@@ -27,15 +27,17 @@ if env == "uat":
                                  'CLICKHOUSE_PASSWORD': 'U+jeKgAL',
                                  'CLICKHOUSE_DB': 'supervisor_dashboard'}
     cluster = ""
+    external_database = "sv_engine"
 
 elif env == "prod":
     App_key = "2e1ec4de71f806c02e5c746e4a396a4b"
     App_secret = "5371565d62db62fd54189153af5998e52e1ec4de71f806c02e5c746e4a396a4b"
     # clickhouse_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsS0xzd0t0eFFLcG9mMUJUeHlLZDhQNmQ5cWpwMGhzWU1rZDlUd0J6UFU2TmZodUFjYnVMVTZsbWxVeGNZUU5kbjJHdXJOZHRBZy9OSVU1b2FiUllhaWxPMS91bjhrbzJmL2dOOStXVnJmdTh5Y0lMSlMxK1l3c1hsdzFhK1BKWFF0V3FHUVhoNXBuLysyN2R1aWNxWU9kd0srZ0R5RGlMUEtma3BXWHNLbWJGUWNMZStWVE1UU21ZT25xQy9sV0tsUzVEdjhIOEhsRGR6bm13M0VETUxIU2pYRDIyS29kaVZaem56a1duR08wPSIsIm5iZiI6MTc0MTMzODQwMiwiaXNzIjoid2F0dF9hbW1zX3Byb2QiLCJleHAiOjE3Nzc1NDAwMDIsImlhdCI6MTc0MTMzODc5NX0.glry1X9BnKKmVbKyKJbn_jK5RbZ9y2zQREnesaepoto"
     clickhouse_token = ""
-    clickhouse_connect_params = {'CLICKHOUSE_HOST': '10.216.3.90',
+    clickhouse_connect_params = {'CLICKHOUSE_HOST': '10.216.3.89',
                                  'CLICKHOUSE_PORT': '8123',
                                  'CLICKHOUSE_USER': 'cl_defa',
                                  'CLICKHOUSE_PASSWORD': 'LC+ziNrP',
                                  'CLICKHOUSE_DB': 'supervisor_dashboard'}
     cluster = "cl_1shards_2replicas"
+    external_database = "sv_engine_data"

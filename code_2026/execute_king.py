@@ -224,7 +224,16 @@ class EXECUTE_KING(object):
             # 开始拼接（只含join）
             main_table_name = table_list[0] # zo_all_2025_p为主表
             main_df = df_source[main_table_name].copy() 
-            main_df = main_df[main_df['mars_region_name'] != '总部订单大区']
+
+            # 将需要排除的区域放入列表
+            exclude_regions = ['总部订单大区', '电商大区']
+            
+            # 过滤逻辑
+            main_df = main_df[
+                (~main_df['mars_region_name'].isin(exclude_regions)) & 
+                (main_df['rtm_channel_name'] != '散装联营')
+            ]
+            
             df_merge = self._merge_dataframes(main_df, df_source, table_list[1:])
 
             # 计算部分

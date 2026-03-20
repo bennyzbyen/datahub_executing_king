@@ -31,7 +31,7 @@ class CLickHouseOperation:
     def fetch_ext_df(self, clickhouse_table, columns)->pd.DataFrame:
         # 实例化包装类
         wrapper = ClientWrapper(client_type='clickhouse', clickhouse_token='')
-        sql = f"SELECT {','.join(columns)} FROM sv_engine.{clickhouse_table}"
+        sql = f"SELECT {','.join(columns)} FROM {external_database}.{clickhouse_table}"
         logger.info(f"sql:{sql}")
         
         # 增加一个安全检查
