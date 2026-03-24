@@ -75,10 +75,6 @@ class DataSource:
             return df
             
         return pd.read_csv(file_path, dtype=str, compression='gzip')
-
-    @staticmethod
-    def read_gzip_df(file_path: str, usecols:list = None)->pd.DataFrame:
-        return pd.read_csv(file_path, dtype=str, usecols=usecols, compression='gzip')
     
     def read_fs_2_df(self, fs_file_path: str, file_path: str, usecols:list = None) -> pd.DataFrame:
         file_type = self.file_type
