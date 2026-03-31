@@ -149,22 +149,28 @@ class EXECUTE_KING(object):
         
         # 条件 A：关联匹配 (与外部数据比对)
         base_keys = ['chain_brand_name', 'nation_hq_name', 'city_hq_name', 'code']
-        period_keys = ['period'] + base_keys
         
-        # 1. 外部数据中 period 有值：使用 period + 基础字段 进行匹配
+        def is_valid_val(val):
+            return pd.notna(val) and str(val).strip() not in ('None', 'nan', '')
+            
         print(ext_df.head())
-        ext_with_p = ext_df[ext_df['period'].notna()][period_keys].drop_duplicates()
-        ext_with_p['__match__'] = 1
-        merged_p = df.merge(ext_with_p, on=period_keys, how='left')
-        # 修复点：添加 .values
-        df.loc[(merged_p['__match__'] == 1).values, result_col] = 1 
+        ext_df_unique = ext_df.drop_duplicates()
         
-        # 2. 外部数据中 period 为空：仅使用 基础字段 进行降级匹配
-        ext_no_p = ext_df[ext_df['period'].isna()][base_keys].drop_duplicates()
-        ext_no_p['__match__'] = 1
-        merged_no_p = df.merge(ext_no_p, on=base_keys, how='left')
-        # 修复点：添加 .values
-        df.loc[(merged_no_p['__match__'] == 1).values, result_col] = 1
+        for _, row in ext_df_unique.iterrows():
+            mask = None
+            
+            # period 条件
+            if 'period' in row and is_valid_val(row['period']):
+                mask = (df['period'] == row['period'])
+                
+            # 基础字段条件
+            for k in base_keys:
+                if k in row and is_valid_val(row[k]):
+                    cond_k = (df[k] == row[k])
+                    mask = cond_k if mask is None else (mask & cond_k)
+                    
+            if mask is not None:
+                df.loc[mask, result_col] = 1
 
         return df
     
