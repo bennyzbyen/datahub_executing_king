@@ -46,7 +46,8 @@ if env == 'uat':
         "C_783595b7d27a414f8bb89f36dcaaec2c": "npd_sku",
         "C_ca1c2798d3ab4682b1f978c49ae5793f": "sku_count_target",
         "C_8af0d420a1964db280488de7f468c999": "acuracy_rate",
-        "C_f9a8bff94c7347089a1695b58238fb06": "green_light_target"
+        "C_f9a8bff94c7347089a1695b58238fb06": "green_light_target",
+        "C_767d3dddb2f94cb8808a9c7882ac7b19": "filter_out"
     }
 
     b5_target_column_map = {
@@ -59,7 +60,8 @@ if env == 'uat':
         "C_54018814ca1a4f7ea235425090f31885": "b5_sku",
         "C_6528e246d4f0468997ad40350025b9e4": "sku_count_target",
         "C_dfd92627cbe5496887eaf31cc58e7c38": "acuracy_rate",
-        "C_9d0fe928f244470683410cfc0bff64db": "green_light_target"
+        "C_9d0fe928f244470683410cfc0bff64db": "green_light_target",
+        "C_66183aa381cf474db9d215f169e4fa00": "filter_out"
     }
 
 
@@ -92,7 +94,9 @@ elif env == 'prod':
         "C_3edc5780d2d147b4b063faa2c4ab06db": "npd_sku",
         "C_161d3ccd49794583872f4a810dc43271": "sku_count_target",
         "C_36fdf49453fe4b62948a4e79747b4cee": "acuracy_rate",
-        "C_7b0efcd58ced41aabd5909356a121ef7": "green_light_target"
+        "C_7b0efcd58ced41aabd5909356a121ef7": "green_light_target",
+        # TODO: 待补充 prod 环境 np_target_table【剔除基础执行考核】列编码
+        "TODO_NP_FILTER_OUT_PROD": "filter_out"
     }
 
     b5_target_column_map = {
@@ -105,7 +109,9 @@ elif env == 'prod':
         "C_85d3d9fb18864f0eb0ac42be41aaa846": "b5_sku",
         "C_47ffd259a15a4621a42dcb4b958b60a7": "sku_count_target",
         "C_d556e1ff85d647c6bd21ffd4e48e5023": "acuracy_rate",
-        "C_7dd60f998784468a8d1e9a2808650c71": "green_light_target"
+        "C_7dd60f998784468a8d1e9a2808650c71": "green_light_target",
+        # TODO: 待补充 prod 环境 b5_target_table【剔除基础执行考核】列编码
+        "TODO_B5_FILTER_OUT_PROD": "filter_out"
     }
 else:
     clickhouse_host = '???'
@@ -137,6 +143,21 @@ def check_params(params):
         return False
     else:
         return True
+
+def filter_target_rows(df, *, require_sku_target):
+    # 剔除外部目标数据中不参与匹配的行：
+    # - filter_out == 1 时整行排除（【剔除基础执行考核】列，Nullable(Decimal)）
+    # - require_sku_target=True 时，sku_count_target 为空也整行排除
+    if df.empty:
+        return df
+    mask = pd.Series(True, index=df.index)
+    if 'filter_out' in df.columns:
+        # 列存储为 Decimal，需先转数值再比较，否则 Decimal('1.0000') != '1'
+        filter_out_num = pd.to_numeric(df['filter_out'], errors='coerce')
+        mask &= (filter_out_num != 1)
+    if require_sku_target and 'sku_count_target' in df.columns:
+        mask &= df['sku_count_target'].notna()
+    return df[mask].reset_index(drop=True)
     
 def get_mars_province_region(text):
     # 匹配所有地理字段类型
@@ -289,6 +310,7 @@ def calc_single(params):
         df_np_total = df_np.groupby(['period', 'mars_week', 'npd_sku']).agg(npd_sku_count=('npd_sku_count', 'sum')).reset_index()
 
         df_np_target = df_np_target.rename(columns=np_target_column_map)
+        df_np_target = filter_target_rows(df_np_target, require_sku_target=False)
         df_np_target_province = df_np_target[(~df_np_target['cal_ncd'].isna()) & (~df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_np_target_region = df_np_target[(df_np_target['cal_ncd'].isna()) & (~df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_np_target_total = df_np_target[(df_np_target['cal_ncd'].isna()) & (df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
@@ -356,6 +378,7 @@ def calc_single(params):
         df_b5_total = df_b5.groupby(['period', 'mars_week', 'b5_sku']).agg(b5_sku_count=('b5_sku_count', 'sum')).reset_index()
 
         df_b5_target = df_b5_target.rename(columns=b5_target_column_map)
+        df_b5_target = filter_target_rows(df_b5_target, require_sku_target=False)
         df_b5_target_province = df_b5_target[(~df_b5_target['cal_ncd'].isna()) & (~df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_b5_target_region = df_b5_target[(df_b5_target['cal_ncd'].isna()) & (~df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_b5_target_total = df_b5_target[(df_b5_target['cal_ncd'].isna()) & (df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
