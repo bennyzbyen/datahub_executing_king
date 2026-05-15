@@ -318,7 +318,7 @@ def calc_single(params):
         df_np_region['achievement_rate'] = df_np_region['achievement_rate'].round(4)
 
         # 计算总目标达成率
-        target_join_colums.remove('cal_ncd_category')
+        target_join_colums.remove('cal_ncd_category') 
         target_on_column.remove('cal_ncd_category')
         df_np_total = df_np_total.merge(df_np_target_total[target_join_colums], on=target_on_column, how='left')
         columns_to_convert = ['npd_sku_count', 'sku_count_target', 'acuracy_rate']
