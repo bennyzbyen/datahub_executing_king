@@ -44,8 +44,8 @@ class DataProcess:
         # 条件 ②: 门店有效性为“1”
         condition2 = df['state'] == '1'
 
-        # 条件 ③: 剔除客户系列为：步步高、千惠、家乐福
-        chain_brand_name_list = ['步步高', '千惠', '家乐福']
+        # 条件 ③: 剔除客户系列为：步步高、千惠、家乐福、盒马鲜生
+        chain_brand_name_list = ['步步高', '千惠', '家乐福', '盒马鲜生']
         condition3 = ~df['chain_brand_name'].isin(chain_brand_name_list)
 
         # 条件 ④: 剔除全国总部为：永辉生活、华润万家-高端店
