@@ -149,20 +149,138 @@ def check_params(params):
     else:
         return True
 
-def filter_target_rows(df, *, require_sku_target):
+def _safe_notna(series):
+    # 兼容 pandas 1.x / 2.x 的 None、np.nan、pd.NA 判断，返回纯 bool Series
+    return pd.Series(pd.notna(series), index=series.index, dtype=bool)
+
+def _has_value(series):
+    # 关键：不要让 pandas StringDtype 的 <NA> 参与布尔 mask
+    s = series.astype(object)
+    s = s.where(pd.notna(s), np.nan)
+    mask = s.notna() & (s.astype(str).str.strip() != '')
+    return pd.Series(mask, index=series.index, dtype=bool).fillna(False)
+
+def _normalize_filter_key_columns(df, columns):
+    # 统一过滤/重建用 key 字段，避免 Python3.7+pandas1.3 和 Python3.12+pandas2.x 行为不同
+    df = df.copy()
+    for col in columns:
+        if col in df.columns:
+            df[col] = df[col].astype(object)
+            df.loc[pd.isna(df[col]), col] = np.nan
+            str_mask = df[col].map(lambda x: isinstance(x, str))
+            df.loc[str_mask, col] = df.loc[str_mask, col].map(lambda x: x.strip())
+            df.loc[df[col] == '', col] = np.nan
+    return df
+
+def _eq_mask(series, value):
+    # 等值比较统一返回纯 bool Series，防止 pd.NA 进入 mask
+    s = series.astype(object)
+    s = s.where(pd.notna(s), np.nan)
+    if pd.isna(value):
+        return pd.Series(pd.isna(s), index=series.index, dtype=bool)
+    return pd.Series(s == value, index=series.index, dtype=bool).fillna(False)
+
+def build_filter_out_rules(df, *, sku_col):
+    required_cols = {sku_col, 'mars_region_name', 'mars_province_name', 'filter_out'}
+    if df.empty or not required_cols.issubset(df.columns):
+        return pd.DataFrame(columns=[sku_col, 'mars_region_name', 'mars_province_name'])
+
+    df_norm = _normalize_filter_key_columns(df, [sku_col, 'mars_region_name', 'mars_province_name'])
+    filter_out_num = pd.to_numeric(df_norm['filter_out'], errors='coerce')
+    rules = df_norm.loc[filter_out_num == 1, [sku_col, 'mars_region_name', 'mars_province_name']].copy()
+    rules = _normalize_filter_key_columns(rules, [sku_col, 'mars_region_name', 'mars_province_name'])
+    rules = rules[_has_value(rules[sku_col]) & _has_value(rules['mars_region_name'])]
+    return rules.drop_duplicates().reset_index(drop=True)
+
+def apply_filter_out_rules(df, rules, *, sku_col):
+    if df.empty or rules.empty:
+        return df
+    if not {sku_col, 'mars_region_name', 'mars_province_name'}.issubset(df.columns):
+        return df
+
+    filtered_df = _normalize_filter_key_columns(df, [sku_col, 'mars_region_name', 'mars_province_name'])
+    rules = _normalize_filter_key_columns(rules, [sku_col, 'mars_region_name', 'mars_province_name'])
+
+    mask = pd.Series(True, index=filtered_df.index, dtype=bool)
+    for _, rule in rules.iterrows():
+        sku_mask = _eq_mask(filtered_df[sku_col], rule[sku_col])
+        if pd.notna(rule['mars_province_name']):
+            rule_mask = sku_mask & _eq_mask(filtered_df['mars_province_name'], rule['mars_province_name'])
+        else:
+            rule_mask = sku_mask & _eq_mask(filtered_df['mars_region_name'], rule['mars_region_name'])
+        mask = mask & (~rule_mask.fillna(False))
+
+    return filtered_df.loc[mask].reset_index(drop=True)
+
+def rebuild_affected_target_rollups(df, rules, *, sku_col):
+    if df.empty or rules.empty:
+        return df
+    required_cols = {sku_col, 'mars_region_name', 'mars_province_name', 'sku_count_target'}
+    if not required_cols.issubset(df.columns):
+        return df
+
+    result = _normalize_filter_key_columns(df, [sku_col, 'mars_region_name', 'mars_province_name'])
+    rules = _normalize_filter_key_columns(rules, [sku_col, 'mars_region_name', 'mars_province_name'])
+    province_rules = rules[_has_value(rules['mars_province_name'])].drop_duplicates([sku_col, 'mars_region_name'])
+
+    for _, rule in province_rules.iterrows():
+        sku_value = rule[sku_col]
+        region_value = rule['mars_region_name']
+        detail_mask = (
+            _eq_mask(result[sku_col], sku_value)
+            & _eq_mask(result['mars_region_name'], region_value)
+            & _has_value(result['mars_province_name'])
+        )
+        rollup_mask = (
+            _eq_mask(result[sku_col], sku_value)
+            & _eq_mask(result['mars_region_name'], region_value)
+            & (~_has_value(result['mars_province_name']))
+        )
+        target_sum = pd.to_numeric(result.loc[detail_mask, 'sku_count_target'], errors='coerce').sum(min_count=1)
+        if pd.isna(target_sum):
+            result = result.loc[~rollup_mask].copy()
+        elif bool(rollup_mask.any()):
+            result.loc[rollup_mask, 'sku_count_target'] = target_sum
+
+    for sku_value in rules.loc[_has_value(rules[sku_col]), sku_col].drop_duplicates():
+        region_mask = (
+            _eq_mask(result[sku_col], sku_value)
+            & _has_value(result['mars_region_name'])
+            & (~_has_value(result['mars_province_name']))
+        )
+        total_mask = (
+            _eq_mask(result[sku_col], sku_value)
+            & (~_has_value(result['mars_region_name']))
+            & (~_has_value(result['mars_province_name']))
+        )
+        target_sum = pd.to_numeric(result.loc[region_mask, 'sku_count_target'], errors='coerce').sum(min_count=1)
+        if pd.isna(target_sum):
+            result = result.loc[~total_mask].copy()
+        elif bool(total_mask.any()):
+            result.loc[total_mask, 'sku_count_target'] = target_sum
+    return result.reset_index(drop=True)
+
+def filter_target_rows(df, *, require_sku_target, sku_col=None, filter_out_rules=None):
     # 剔除外部目标数据中不参与匹配的行：
-    # - filter_out == 1 时整行排除（【剔除基础执行考核】列，Nullable(Decimal)）
+    # - filter_out == 1 时，按 sku + mars_province_name 或 sku + mars_region_name 生成剔除规则
     # - require_sku_target=True 时，sku_count_target 为空也整行排除
     if df.empty:
         return df
-    mask = pd.Series(True, index=df.index)
-    if 'filter_out' in df.columns:
-        # 列存储为 Decimal，需先转数值再比较，否则 Decimal('1.0000') != '1'
-        filter_out_num = pd.to_numeric(df['filter_out'], errors='coerce')
-        mask &= (filter_out_num != 1)
-    if require_sku_target and 'sku_count_target' in df.columns:
-        mask &= df['sku_count_target'].notna()
-    return df[mask].reset_index(drop=True)
+
+    if sku_col and sku_col in df.columns:
+        if filter_out_rules is None:
+            filter_out_rules = build_filter_out_rules(df, sku_col=sku_col)
+        filtered_df = apply_filter_out_rules(df, filter_out_rules, sku_col=sku_col)
+        filtered_df = rebuild_affected_target_rollups(filtered_df, filter_out_rules, sku_col=sku_col)
+    else:
+        filtered_df = df.copy()
+        if 'filter_out' in filtered_df.columns:
+            filter_out_num = pd.to_numeric(filtered_df['filter_out'], errors='coerce')
+            filtered_df = filtered_df[pd.Series(filter_out_num != 1, index=filtered_df.index, dtype=bool).fillna(True)]
+
+    if require_sku_target and 'sku_count_target' in filtered_df.columns:
+        filtered_df = filtered_df[_safe_notna(filtered_df['sku_count_target'])]
+    return filtered_df.reset_index(drop=True)
     
 def get_mars_province_region(text):
     # 匹配所有地理字段类型
@@ -313,12 +431,19 @@ def calc_single(params):
         logger.info(query_target)
         df_np_target = client.query_df(query_target)
 
+        df_np_target = df_np_target.rename(columns=np_target_column_map)
+        np_filter_out_rules = build_filter_out_rules(df_np_target, sku_col='npd_sku')
+        df_np = apply_filter_out_rules(df_np, np_filter_out_rules, sku_col='npd_sku')
+        df_np_target = filter_target_rows(
+            df_np_target,
+            require_sku_target=True,
+            sku_col='npd_sku',
+            filter_out_rules=np_filter_out_rules,
+        )
+
         df_np_province = df_np.copy()
         df_np_region = df_np.groupby(['period', 'mars_week', 'npd_sku', 'mars_region_name']).agg(npd_sku_count=('npd_sku_count', 'sum')).reset_index()
         df_np_total = df_np.groupby(['period', 'mars_week', 'npd_sku']).agg(npd_sku_count=('npd_sku_count', 'sum')).reset_index()
-
-        df_np_target = df_np_target.rename(columns=np_target_column_map)
-        df_np_target = filter_target_rows(df_np_target, require_sku_target=True)
         df_np_target_province = df_np_target[(~df_np_target['mars_province_name'].isna()) & (~df_np_target['mars_region_name'].isna())].reset_index(drop=True)
         df_np_target_region = df_np_target[(df_np_target['mars_province_name'].isna()) & (~df_np_target['mars_region_name'].isna())].reset_index(drop=True)
         df_np_target_total = df_np_target[(df_np_target['mars_province_name'].isna()) & (df_np_target['mars_region_name'].isna())].reset_index(drop=True)
@@ -382,12 +507,19 @@ def calc_single(params):
         logger.info(query_target)
         df_b5_target = client.query_df(query_target)
 
+        df_b5_target = df_b5_target.rename(columns=b5_target_column_map)
+        b5_filter_out_rules = build_filter_out_rules(df_b5_target, sku_col='b5_sku')
+        df_b5 = apply_filter_out_rules(df_b5, b5_filter_out_rules, sku_col='b5_sku')
+        df_b5_target = filter_target_rows(
+            df_b5_target,
+            require_sku_target=True,
+            sku_col='b5_sku',
+            filter_out_rules=b5_filter_out_rules,
+        )
+
         df_b5_province = df_b5.copy()
         df_b5_region = df_b5.groupby(['period', 'mars_week', 'b5_sku', 'mars_region_name']).agg(b5_sku_count=('b5_sku_count', 'sum')).reset_index()
         df_b5_total = df_b5.groupby(['period', 'mars_week', 'b5_sku']).agg(b5_sku_count=('b5_sku_count', 'sum')).reset_index()
-
-        df_b5_target = df_b5_target.rename(columns=b5_target_column_map)
-        df_b5_target = filter_target_rows(df_b5_target, require_sku_target=True)
         df_b5_target_province = df_b5_target[(~df_b5_target['mars_province_name'].isna()) & (~df_b5_target['mars_region_name'].isna())].reset_index(drop=True)
         df_b5_target_region = df_b5_target[(df_b5_target['mars_province_name'].isna()) & (~df_b5_target['mars_region_name'].isna())].reset_index(drop=True)
         df_b5_target_total = df_b5_target[(df_b5_target['mars_province_name'].isna()) & (df_b5_target['mars_region_name'].isna())].reset_index(drop=True)
@@ -474,11 +606,14 @@ def genResultFromDf(df_r: pd.DataFrame):
         data.append(r)
     r = {'fields': [{'name': c, 'type': 'string'} for c in df_r.columns],
          'data': data}
-    logger.info('df_r:\n{}', df_r.head())
+    logger.info('df_r:\n{}', df_r)
     return r
 if __name__ == "__main__":
 
-    # r = calc_single({'platform': 'TMALL', 'date_range': ['1677427200000', '1677945600000'], 'mw_category_name': 'CHO'})
+    # r = calc_single({
+    #     "period": "2026P03",
+    #     "dataPermissionContextSQL": " ( (1 = 1) ) "
+    # })
     # print(r)
 
     params_path = sys.argv[1]

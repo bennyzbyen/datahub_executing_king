@@ -145,56 +145,27 @@ def check_params(params):
         return True
 
 def _has_value(series):
-    """
-    兼容 pandas 1.x / 2.x 的非空判断。
-    pandas 新版 StringDtype 会产生 pd.NA，直接参与布尔 mask 时可能导致不同环境结果不一致。
-    这里统一转 object，并把 None / pd.NA / NaN 统一成 np.nan。
-    """
-    s = series.astype(object)
-    s = s.where(pd.notna(s), np.nan)
-    return (s.notna() & (s.astype(str).str.strip() != '')).fillna(False)
-
+    return series.notna() & (series.astype(str).str.strip() != '')
 
 def _normalize_filter_key_columns(df, columns):
-    """
-    统一 filter / join key 的空值和字符串格式，避免 Python 3.7/pandas 1.3 与
-    Python 3.12/新版 pandas 对 pd.NA、StringDtype 的处理差异。
-    """
-    df = df.copy()
     for col in columns:
         if col in df.columns:
-            # 强制 object，避免 pandas StringDtype / pd.NA 参与比较时产生 NA mask
-            df[col] = df[col].astype(object)
-
-            # 统一空值为 np.nan
-            df.loc[pd.isna(df[col]), col] = np.nan
-
-            # 字符串去前后空格
+            df[col] = df[col].where(df[col].notna(), np.nan)
             str_mask = df[col].map(lambda x: isinstance(x, str))
             df.loc[str_mask, col] = df.loc[str_mask, col].map(lambda x: x.strip())
-
-            # 空字符串视为空值
             df.loc[df[col] == '', col] = np.nan
     return df
-
-
-def _eq_mask(series, value):
-    """兼容 pd.NA 的等值比较，确保返回纯 bool mask。"""
-    return (series == value).fillna(False).astype(bool)
-
 
 def build_filter_out_rules(df, *, sku_col):
     required_cols = {sku_col, 'cal_ncd_category', 'cal_ncd', 'filter_out'}
     if df.empty or not required_cols.issubset(df.columns):
         return pd.DataFrame(columns=[sku_col, 'cal_ncd_category', 'cal_ncd'])
 
-    work_df = _normalize_filter_key_columns(df, [sku_col, 'cal_ncd_category', 'cal_ncd'])
-    filter_out_num = pd.to_numeric(work_df['filter_out'], errors='coerce')
-    rules = work_df.loc[filter_out_num == 1, [sku_col, 'cal_ncd_category', 'cal_ncd']].copy()
+    filter_out_num = pd.to_numeric(df['filter_out'], errors='coerce')
+    rules = df.loc[filter_out_num == 1, [sku_col, 'cal_ncd_category', 'cal_ncd']].copy()
     rules = _normalize_filter_key_columns(rules, [sku_col, 'cal_ncd_category', 'cal_ncd'])
     rules = rules[_has_value(rules[sku_col]) & _has_value(rules['cal_ncd_category'])]
     return rules.drop_duplicates().reset_index(drop=True)
-
 
 def apply_filter_out_rules(df, rules, *, sku_col):
     if df.empty or rules.empty:
@@ -202,19 +173,15 @@ def apply_filter_out_rules(df, rules, *, sku_col):
     if not {sku_col, 'cal_ncd_category', 'cal_ncd'}.issubset(df.columns):
         return df
 
-    filtered_df = _normalize_filter_key_columns(df, [sku_col, 'cal_ncd_category', 'cal_ncd'])
-    rules = _normalize_filter_key_columns(rules, [sku_col, 'cal_ncd_category', 'cal_ncd'])
-
-    mask = pd.Series(True, index=filtered_df.index, dtype=bool)
+    filtered_df = _normalize_filter_key_columns(df.copy(), [sku_col, 'cal_ncd_category', 'cal_ncd'])
+    mask = pd.Series(True, index=filtered_df.index)
     for _, rule in rules.iterrows():
-        sku_mask = _eq_mask(filtered_df[sku_col], rule[sku_col])
+        sku_mask = filtered_df[sku_col] == rule[sku_col]
         if pd.notna(rule['cal_ncd']):
-            rule_mask = sku_mask & _eq_mask(filtered_df['cal_ncd'], rule['cal_ncd'])
+            mask &= ~(sku_mask & (filtered_df['cal_ncd'] == rule['cal_ncd']))
         else:
-            rule_mask = sku_mask & _eq_mask(filtered_df['cal_ncd_category'], rule['cal_ncd_category'])
-        mask = mask & (~rule_mask.fillna(False).astype(bool))
+            mask &= ~(sku_mask & (filtered_df['cal_ncd_category'] == rule['cal_ncd_category']))
     return filtered_df[mask].reset_index(drop=True)
-
 
 def rebuild_affected_target_rollups(df, rules, *, sku_col):
     if df.empty or rules.empty:
@@ -223,23 +190,20 @@ def rebuild_affected_target_rollups(df, rules, *, sku_col):
     if not required_cols.issubset(df.columns):
         return df
 
-    result = _normalize_filter_key_columns(df, [sku_col, 'cal_ncd_category', 'cal_ncd'])
-    rules = _normalize_filter_key_columns(rules, [sku_col, 'cal_ncd_category', 'cal_ncd'])
+    result = _normalize_filter_key_columns(df.copy(), [sku_col, 'cal_ncd_category', 'cal_ncd'])
+    province_rules = rules[rules['cal_ncd'].notna()].drop_duplicates([sku_col, 'cal_ncd_category'])
 
-    province_rules = rules[_has_value(rules['cal_ncd'])].drop_duplicates([sku_col, 'cal_ncd_category'])
-
-    # 明细省份被剔除后，重算对应大区 rollup target
     for _, rule in province_rules.iterrows():
         sku_value = rule[sku_col]
         category_value = rule['cal_ncd_category']
         detail_mask = (
-            _eq_mask(result[sku_col], sku_value)
-            & _eq_mask(result['cal_ncd_category'], category_value)
+            (result[sku_col] == sku_value)
+            & (result['cal_ncd_category'] == category_value)
             & _has_value(result['cal_ncd'])
         )
         rollup_mask = (
-            _eq_mask(result[sku_col], sku_value)
-            & _eq_mask(result['cal_ncd_category'], category_value)
+            (result[sku_col] == sku_value)
+            & (result['cal_ncd_category'] == category_value)
             & (~_has_value(result['cal_ncd']))
         )
         target_sum = pd.to_numeric(result.loc[detail_mask, 'sku_count_target'], errors='coerce').sum(min_count=1)
@@ -248,15 +212,14 @@ def rebuild_affected_target_rollups(df, rules, *, sku_col):
         elif rollup_mask.any():
             result.loc[rollup_mask, 'sku_count_target'] = target_sum
 
-    # 大区 rollup 变动后，重算 total rollup target
     for sku_value in rules[sku_col].dropna().unique():
         category_mask = (
-            _eq_mask(result[sku_col], sku_value)
+            (result[sku_col] == sku_value)
             & _has_value(result['cal_ncd_category'])
             & (~_has_value(result['cal_ncd']))
         )
         total_mask = (
-            _eq_mask(result[sku_col], sku_value)
+            (result[sku_col] == sku_value)
             & (~_has_value(result['cal_ncd_category']))
             & (~_has_value(result['cal_ncd']))
         )
@@ -266,7 +229,6 @@ def rebuild_affected_target_rollups(df, rules, *, sku_col):
         elif total_mask.any():
             result.loc[total_mask, 'sku_count_target'] = target_sum
     return result.reset_index(drop=True)
-
 
 def filter_target_rows(df, *, require_sku_target, sku_col=None, filter_out_rules=None):
     # 剔除外部目标数据中不参与匹配的行：
@@ -287,10 +249,151 @@ def filter_target_rows(df, *, require_sku_target, sku_col=None, filter_out_rules
             filter_out_num = pd.to_numeric(filtered_df['filter_out'], errors='coerce')
             filtered_df = filtered_df[filter_out_num != 1]
 
-    if require_sku_target and 'sku_count_target' in filtered_df.columns:
+    if require_sku_target and 'sku_count_target' in df.columns:
         filtered_df = filtered_df[filtered_df['sku_count_target'].notna()]
     return filtered_df.reset_index(drop=True)
     
+
+
+# ---------------- DEBUG LOG HELPERS (Python 3.7 compatible) ----------------
+DEBUG_SAMPLE_ROWS = int(os.environ.get('DEBUG_SAMPLE_ROWS', '20'))
+
+def _debug_cell_value(x):
+    """Convert values to log-safe primitives. Compatible with Python 3.7 / pandas older versions."""
+    try:
+        if pd.isna(x):
+            return None
+    except Exception:
+        pass
+    try:
+        if isinstance(x, np.generic):
+            return x.item()
+    except Exception:
+        pass
+    if isinstance(x, Decimal):
+        return str(x)
+    try:
+        if isinstance(x, (datetime.datetime, datetime.date)):
+            return x.isoformat()
+    except Exception:
+        pass
+    return x
+
+def _debug_records(df, cols=None, limit=None):
+    """Return a small list[dict] sample. Avoid DataFrame.to_string for compatibility and log size."""
+    if limit is None:
+        limit = DEBUG_SAMPLE_ROWS
+    try:
+        if df is None:
+            return []
+        if cols:
+            real_cols = [c for c in cols if c in df.columns]
+            sample = df.loc[:, real_cols].head(limit).copy()
+        else:
+            sample = df.head(limit).copy()
+        for c in sample.columns:
+            sample[c] = sample[c].map(_debug_cell_value)
+        return sample.to_dict('records')
+    except Exception as e:
+        return [{'debug_error': repr(e)}]
+
+def _debug_count_notna(df, col):
+    try:
+        if df is None or col not in df.columns:
+            return None
+        return int(df[col].notna().sum())
+    except Exception:
+        return None
+
+def _debug_nunique(df, col):
+    try:
+        if df is None or col not in df.columns:
+            return None
+        return int(df[col].nunique(dropna=True))
+    except Exception:
+        return None
+
+def _debug_sum_numeric(df, col):
+    try:
+        if df is None or col not in df.columns:
+            return None
+        v = pd.to_numeric(df[col], errors='coerce').sum()
+        if pd.isna(v):
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+def _debug_df_basic(name, df, cols=None, sample_rows=None):
+    """Small, safe DataFrame debug log."""
+    try:
+        if df is None:
+            logger.info('[DEBUG] {}: None', name)
+            return
+        logger.info('[DEBUG] {} shape={} columns={}', name, tuple(df.shape), list(df.columns))
+        if cols:
+            real_cols = [c for c in cols if c in df.columns]
+            null_counts = {}
+            dtypes = {}
+            for c in real_cols:
+                try:
+                    null_counts[c] = int(df[c].isna().sum())
+                except Exception:
+                    null_counts[c] = 'ERR'
+                try:
+                    dtypes[c] = str(df[c].dtype)
+                except Exception:
+                    dtypes[c] = 'ERR'
+            logger.info('[DEBUG] {} selected_dtypes={}', name, dtypes)
+            logger.info('[DEBUG] {} selected_null_counts={}', name, null_counts)
+            logger.info('[DEBUG] {} sample_records={}', name, _debug_records(df, real_cols, sample_rows))
+    except Exception as e:
+        logger.info('[DEBUG] {} log_failed={}', name, repr(e))
+
+def _debug_filter_out_distribution(name, df):
+    try:
+        if df is None or 'filter_out' not in df.columns:
+            logger.info('[DEBUG] {} filter_out_dist=NO_COLUMN', name)
+            return
+        s = pd.to_numeric(df['filter_out'], errors='coerce')
+        dist = s.value_counts(dropna=False).head(20).to_dict()
+        safe_dist = {}
+        for k, v in dist.items():
+            safe_dist[str(_debug_cell_value(k))] = int(v)
+        logger.info('[DEBUG] {} filter_out_dist={}', name, safe_dist)
+    except Exception as e:
+        logger.info('[DEBUG] {} filter_out_dist_failed={}', name, repr(e))
+
+def _debug_total_target(name, df, sku_col):
+    cols = ['period', 'mars_week', sku_col, 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate', 'filter_out']
+    try:
+        if df is None or df.empty:
+            logger.info('[DEBUG] {} total_target empty_or_none shape={}', name, None if df is None else tuple(df.shape))
+            return
+        if 'cal_ncd' in df.columns and 'cal_ncd_category' in df.columns:
+            total_df = df[df['cal_ncd'].isna() & df['cal_ncd_category'].isna()].copy()
+        else:
+            total_df = df.copy()
+        logger.info('[DEBUG] {} total_target_shape={}', name, tuple(total_df.shape))
+        logger.info('[DEBUG] {} total_target_sku_nunique={}', name, _debug_nunique(total_df, sku_col))
+        logger.info('[DEBUG] {} total_target_target_notna={}', name, _debug_count_notna(total_df, 'sku_count_target'))
+        logger.info('[DEBUG] {} total_target_target_sum={}', name, _debug_sum_numeric(total_df, 'sku_count_target'))
+        logger.info('[DEBUG] {} total_target_sample={}', name, _debug_records(total_df, cols, DEBUG_SAMPLE_ROWS))
+    except Exception as e:
+        logger.info('[DEBUG] {} total_target_log_failed={}', name, repr(e))
+
+def _debug_total_calc(name, df, sku_col, count_col):
+    cols = ['period', 'mars_week', sku_col, count_col, 'sku_count_target', 'acuracy_rate', 'achievement_rate']
+    try:
+        logger.info('[DEBUG] {} shape={}', name, tuple(df.shape) if df is not None else None)
+        logger.info('[DEBUG] {} sku_nunique={}', name, _debug_nunique(df, sku_col))
+        logger.info('[DEBUG] {} target_notna={}', name, _debug_count_notna(df, 'sku_count_target'))
+        logger.info('[DEBUG] {} achievement_sum={}', name, _debug_sum_numeric(df, 'achievement_rate'))
+        logger.info('[DEBUG] {} sample={}', name, _debug_records(df, cols, DEBUG_SAMPLE_ROWS))
+    except Exception as e:
+        logger.info('[DEBUG] {} total_calc_log_failed={}', name, repr(e))
+# ---------------------------------------------------------------------------
+
 def get_mars_province_region(text):
     # 匹配所有地理字段类型
     pattern = r'(\w*?mars_(?:province|region|city|city_cluster)_name\b)\s*=\s*\'([^\']+)\''
@@ -342,11 +445,19 @@ def calc_single(params):
         # params = {"period":"2025P07"}
         input_period = params.get('period',None)  # period
         params_sql = params['dataPermissionContextSQL']
+        logger.info('[DEBUG] python_version={}', sys.version)
+        logger.info('[DEBUG] pandas_version={}', pd.__version__)
+        logger.info('[DEBUG] numpy_version={}', np.__version__)
+        logger.info('[DEBUG] actual_params_period={}', input_period)
+        logger.info('[DEBUG] actual_params_sql=[{}]', params_sql)
 
         # 获取mars_week
         query_period_np = f"select max(mars_week) from store_np_sku_ttl where period in ('{input_period}')"
         df_mars_week = client.query_df(query_period_np)
         mars_week = df_mars_week.iloc[0,0]
+        logger.info('[DEBUG] query_period_np={}', query_period_np)
+        _debug_df_basic('df_mars_week', df_mars_week)
+        logger.info('[DEBUG] mars_week={}', mars_week)
 
         # 获取权限
         logger.info(params_sql)
@@ -426,6 +537,9 @@ def calc_single(params):
         """
         logger.info(query)
         df_np = client.query_df(query)
+        _debug_df_basic('df_np_raw', df_np, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'npd_sku_count'])
+        logger.info('[DEBUG] df_np_raw npd_sku_nunique={}', _debug_nunique(df_np, 'npd_sku'))
+        logger.info('[DEBUG] df_np_raw npd_sku_count_sum={}', _debug_sum_numeric(df_np, 'npd_sku_count'))
 
         # 读取NP外部数据
         query_target = f"""
@@ -438,7 +552,11 @@ def calc_single(params):
         df_np_target = client.query_df(query_target)
 
         df_np_target = df_np_target.rename(columns=np_target_column_map)
+        _debug_df_basic('df_np_target_after_rename', df_np_target, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate', 'filter_out'])
+        _debug_filter_out_distribution('df_np_target_after_rename', df_np_target)
+        _debug_total_target('df_np_target_before_filter', df_np_target, 'npd_sku')
         np_filter_out_rules = build_filter_out_rules(df_np_target, sku_col='npd_sku')
+        _debug_df_basic('np_filter_out_rules', np_filter_out_rules, ['npd_sku', 'cal_ncd_category', 'cal_ncd'])
         df_np = apply_filter_out_rules(df_np, np_filter_out_rules, sku_col='npd_sku')
         df_np_target = filter_target_rows(
             df_np_target,
@@ -446,6 +564,9 @@ def calc_single(params):
             sku_col='npd_sku',
             filter_out_rules=np_filter_out_rules,
         )
+        _debug_df_basic('df_np_after_filter', df_np, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'npd_sku_count'])
+        _debug_df_basic('df_np_target_after_filter', df_np_target, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate', 'filter_out'])
+        _debug_total_target('df_np_target_after_filter', df_np_target, 'npd_sku')
 
         df_np_province = df_np.copy()
         df_np_region = df_np.groupby(['period', 'mars_week', 'npd_sku', 'cal_ncd_category']).agg(npd_sku_count=('npd_sku_count', 'sum')).reset_index()
@@ -453,6 +574,9 @@ def calc_single(params):
         df_np_target_province = df_np_target[(~df_np_target['cal_ncd'].isna()) & (~df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_np_target_region = df_np_target[(df_np_target['cal_ncd'].isna()) & (~df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_np_target_total = df_np_target[(df_np_target['cal_ncd'].isna()) & (df_np_target['cal_ncd_category'].isna())].reset_index(drop=True)
+        _debug_df_basic('df_np_target_province', df_np_target_province, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate'])
+        _debug_df_basic('df_np_target_region', df_np_target_region, ['period', 'mars_week', 'npd_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate'])
+        _debug_df_basic('df_np_target_total_detail', df_np_target_total, ['period', 'mars_week', 'npd_sku', 'sku_count_target', 'acuracy_rate', 'filter_out'])
 
         # 计算省份目标达成率
         target_join_colums = ['period','mars_week','npd_sku','cal_ncd_category','cal_ncd','sku_count_target','acuracy_rate']
@@ -482,6 +606,7 @@ def calc_single(params):
         target_join_colums.remove('cal_ncd_category') 
         target_on_column.remove('cal_ncd_category')
         df_np_total = df_np_total.merge(df_np_target_total[target_join_colums], on=target_on_column, how='left')
+        _debug_total_calc('df_np_total_after_merge_before_calc', df_np_total, 'npd_sku', 'npd_sku_count')
         columns_to_convert = ['npd_sku_count', 'sku_count_target', 'acuracy_rate']
         for col in columns_to_convert:
             df_np_total[col] = df_np_total[col].astype(float)
@@ -489,6 +614,7 @@ def calc_single(params):
         df_np_total['achievement_rate'] = df_np_total['npd_sku_count'] / df_np_total['sku_count_target']*adjusted_acuracy_rate
         df_np_total['achievement_rate'] = df_np_total['achievement_rate'].clip(upper=1.1)
         df_np_total['achievement_rate'] = df_np_total['achievement_rate'].round(4)
+        _debug_total_calc('df_np_total_achievement', df_np_total, 'npd_sku', 'npd_sku_count')
 
 
         # 读取B5数据
@@ -501,6 +627,9 @@ def calc_single(params):
         """
         logger.info(query)
         df_b5 = client.query_df(query)
+        _debug_df_basic('df_b5_raw', df_b5, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'b5_sku_count'])
+        logger.info('[DEBUG] df_b5_raw b5_sku_nunique={}', _debug_nunique(df_b5, 'b5_sku'))
+        logger.info('[DEBUG] df_b5_raw b5_sku_count_sum={}', _debug_sum_numeric(df_b5, 'b5_sku_count'))
 
         # 读取B5外部数据
         query_target = f"""
@@ -513,7 +642,11 @@ def calc_single(params):
         df_b5_target = client.query_df(query_target)
 
         df_b5_target = df_b5_target.rename(columns=b5_target_column_map)
+        _debug_df_basic('df_b5_target_after_rename', df_b5_target, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate', 'filter_out'])
+        _debug_filter_out_distribution('df_b5_target_after_rename', df_b5_target)
+        _debug_total_target('df_b5_target_before_filter', df_b5_target, 'b5_sku')
         b5_filter_out_rules = build_filter_out_rules(df_b5_target, sku_col='b5_sku')
+        _debug_df_basic('b5_filter_out_rules', b5_filter_out_rules, ['b5_sku', 'cal_ncd_category', 'cal_ncd'])
         df_b5 = apply_filter_out_rules(df_b5, b5_filter_out_rules, sku_col='b5_sku')
         df_b5_target = filter_target_rows(
             df_b5_target,
@@ -521,6 +654,9 @@ def calc_single(params):
             sku_col='b5_sku',
             filter_out_rules=b5_filter_out_rules,
         )
+        _debug_df_basic('df_b5_after_filter', df_b5, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'b5_sku_count'])
+        _debug_df_basic('df_b5_target_after_filter', df_b5_target, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate', 'filter_out'])
+        _debug_total_target('df_b5_target_after_filter', df_b5_target, 'b5_sku')
 
         df_b5_province = df_b5.copy()
         df_b5_region = df_b5.groupby(['period', 'mars_week', 'b5_sku', 'cal_ncd_category']).agg(b5_sku_count=('b5_sku_count', 'sum')).reset_index()
@@ -528,6 +664,9 @@ def calc_single(params):
         df_b5_target_province = df_b5_target[(~df_b5_target['cal_ncd'].isna()) & (~df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_b5_target_region = df_b5_target[(df_b5_target['cal_ncd'].isna()) & (~df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
         df_b5_target_total = df_b5_target[(df_b5_target['cal_ncd'].isna()) & (df_b5_target['cal_ncd_category'].isna())].reset_index(drop=True)
+        _debug_df_basic('df_b5_target_province', df_b5_target_province, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate'])
+        _debug_df_basic('df_b5_target_region', df_b5_target_region, ['period', 'mars_week', 'b5_sku', 'cal_ncd_category', 'cal_ncd', 'sku_count_target', 'acuracy_rate'])
+        _debug_df_basic('df_b5_target_total_detail', df_b5_target_total, ['period', 'mars_week', 'b5_sku', 'sku_count_target', 'acuracy_rate', 'filter_out'])
 
         # 计算省份目标达成率
         target_join_colums = ['period','mars_week','b5_sku','cal_ncd_category','cal_ncd','sku_count_target','acuracy_rate']
@@ -557,6 +696,7 @@ def calc_single(params):
         target_join_colums.remove('cal_ncd_category')
         target_on_column.remove('cal_ncd_category')
         df_b5_total = df_b5_total.merge(df_b5_target_total[target_join_colums], on=target_on_column, how='left')
+        _debug_total_calc('df_b5_total_after_merge_before_calc', df_b5_total, 'b5_sku', 'b5_sku_count')
         columns_to_convert = ['b5_sku_count', 'sku_count_target', 'acuracy_rate']
         for col in columns_to_convert:
             df_b5_total[col] = df_b5_total[col].astype(float)
@@ -564,6 +704,7 @@ def calc_single(params):
         df_b5_total['achievement_rate'] = df_b5_total['b5_sku_count'] / df_b5_total['sku_count_target']*adjusted_acuracy_rate
         df_b5_total['achievement_rate'] = df_b5_total['achievement_rate'].clip(upper=1.1)
         df_b5_total['achievement_rate'] = df_b5_total['achievement_rate'].round(4) 
+        _debug_total_calc('df_b5_total_achievement', df_b5_total, 'b5_sku', 'b5_sku_count')
 
         # 计算平均值
         denominator = int(df_np['npd_sku'].nunique() + df_b5['b5_sku'].nunique())
@@ -584,10 +725,20 @@ def calc_single(params):
 
         keep_cols = ['period','achievement_rate','sku_count_target']
         df_total = pd.concat([df_np_total[keep_cols],df_b5_total[keep_cols]], ignore_index=True)
+        _debug_df_basic('final_df_total_before_agg', df_total, ['period', 'achievement_rate', 'sku_count_target'])
+        logger.info('[DEBUG] final_df_total achievement_rate_sum_before_agg={}', _debug_sum_numeric(df_total, 'achievement_rate'))
+        logger.info('[DEBUG] final_df_total sku_count_target_notna_count={}', _debug_count_notna(df_total, 'sku_count_target'))
+        try:
+            logger.info('[DEBUG] final_df_total sku_count_target_isna_count={}', int(df_total['sku_count_target'].isna().sum()))
+        except Exception as e:
+            logger.info('[DEBUG] final_df_total sku_count_target_isna_count_failed={}', repr(e))
         df_denominator = df_total.groupby(['period'])['sku_count_target'].count().reset_index()
+        _debug_df_basic('final_df_denominator', df_denominator, ['period', 'sku_count_target'])
         df_total = df_total.groupby(['period']).agg(achievement_rate=('achievement_rate', 'sum')).reset_index()
+        _debug_df_basic('final_df_total_sum_before_divide', df_total, ['period', 'achievement_rate'])
         df_total = pd.merge(df_total, df_denominator, on=['period'], how='left')
         df_total['achievement_rate'] = (df_total['achievement_rate'] / df_total['sku_count_target']).round(4)
+        _debug_df_basic('final_df_total_after_divide', df_total, ['period', 'achievement_rate', 'sku_count_target'])
 
         df_result = pd.concat([df_province, df_region, df_total], ignore_index=True)
 
@@ -598,6 +749,7 @@ def calc_single(params):
 
         filtered_df.loc[filtered_df['cal_ncd_category'] == 'NCD', 'cal_ncd'] = 'NCD'
         filtered_df = filtered_df.drop(columns=['cal_ncd_category','sku_count_target'])
+        _debug_df_basic('filtered_df_final_output', filtered_df, ['period', 'cal_ncd', 'achievement_rate'])
 
         return genResultFromDf(filtered_df)
     except Exception as e:
@@ -628,10 +780,7 @@ def genResultFromDf(df_r: pd.DataFrame):
     return r
 if __name__ == "__main__":
 
-    # r = calc_single({
-    #     "period": "2026P03",
-    #     "dataPermissionContextSQL": " ( (1 = 1) ) "
-    # })
+    # r = calc_single({'platform': 'TMALL', 'date_range': ['1677427200000', '1677945600000'], 'mw_category_name': 'CHO'})
     # print(r)
 
     params_path = sys.argv[1]
