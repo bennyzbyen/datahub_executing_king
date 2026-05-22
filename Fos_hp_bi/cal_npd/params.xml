@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<body>
+    <extend>
+    <!-- Processor custom parameters: you can fill in any parameter as a string and pass it to the operator, if you have this requirement -->
+    <![CDATA[
+        {
+            "file_type": "csv.gz",
+            "sku_map": {
+                "f10602": "M&M'S牛奶巧克力豆袋装94.5g",
+                "f10603": "M&M'S花生牛奶巧克力豆袋装94.5g",
+                "f9403": "绿箭桂花乌龙薄荷口香糖瓶装56g",
+                "f10605": "益达咖啡味40s-56g",
+                "f10902": "绿黄白三箭单片盒 - 2.4g",
+                "f10627": "绿箭薄荷糖茉香栀子乌龙味23.8g",
+                "f10807": "益达脆皮软心无糖口香糖30粒酷爽薄荷味64g",
+                "f10806": "益达脆皮软心无糖口香糖30粒芭乐冰茶味64g",
+                "f10911": "品客薯片酸乳酪洋葱味110g"
+            },
+            "sku_cal_range": {
+                "bysku2025_period": [
+                    "f10602",
+                    "f10603",
+                    "f9403",
+                    "f10605",
+                    "f10902",
+                    "f10627",
+                    "f10807",
+                    "f10806",
+                    "f10911"
+                ]
+            },
+            "sku_ttl_filter": {
+                "f10602": [
+                    "CVS",
+                    "Non KA MT",
+                    "TT"
+                ],
+                "f10603": [
+                    "CVS",
+                    "Non KA MT",
+                    "TT"
+                ],
+                "f9403": [
+                    "TT"
+                ],
+                "f10605": [
+                    "Hyper",
+                    "Super",
+                    "Mini",
+                    "CVS"
+                ],
+                "f10902": [
+                    "Hyper",
+                    "Super",
+                    "Mini",
+                    "CVS"
+                ],
+                "f10627": [
+                    "TT"
+                ],
+                "f10807": [
+                    "TT"
+                ],
+                "f10806": [
+                    "TT"
+                ],
+                "f10911": [
+                    "TT"
+                ]
+            },
+            "sku_is_active": {
+                "f10602": true,
+                "f10603": true,
+                "f9403": true,
+                "f10605": true,
+                "f10902": true,
+                "f10627": true,
+                "f10807": true,
+                "f10806": true,
+                "f10911": true
+            }
+        }
+    ]]>
+    </extend>
+    <summary>
+    <!-- Processor summary: you can fill in the output format of the operator. The following is an example-->
+    {
+        "input": "processor input data description",
+        "output": "processor output data description",
+        "size": "e.g. number of rows",
+        "duration": "duration of processing",
+        "remark": "something..."
+    }
+    </summary>
+</body>
