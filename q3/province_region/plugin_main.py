@@ -100,8 +100,7 @@ elif env == 'prod':
         "C_cd002c6f22f04e7bb20249600b118517": "sku_count_target",
         "C_1f0d528e976447be83de843d7ffeb20a": "acuracy_rate",
         "C_e173800c88d045639e8394aff66639b0": "green_light_target",
-        # TODO: 待补充 prod 环境 np_target_table【剔除基础执行考核】列编码
-        "TODO_NP_FILTER_OUT_PROD": "filter_out"
+        "C_dbf92fc8a44c4d7bab526a3cf5821586": "filter_out"
     }
 
     b5_target_column_map = {
@@ -111,12 +110,11 @@ elif env == 'prod':
         "C_aaab0c1afb2c4686be6310918c7af635": "mars_province_name",
         "C_235c5cda25ad4518a9f930b79bf70ac7": "cal_channel_category",
         "C_d1844dfc3d6c40b59ac3b21e8bcb1990": "cal_store_channel_category",
-        "C_bc3e1bb05f534e4590df4e72ec8fc5cd": "b5_sku",
+        "C_555286f9be2440fb899425885c3050dc": "b5_sku",
         "C_0150b408edd34f79abd946edd70fea6a": "sku_count_target",
         "C_a8870b570db14aa8b8af8abecd81acb9": "acuracy_rate",
         "C_9333e2fd5c734e8ab75ea6c2dd6ebdab": "green_light_target",
-        # TODO: 待补充 prod 环境 b5_target_table【剔除基础执行考核】列编码
-        "TODO_B5_FILTER_OUT_PROD": "filter_out"
+        "C_e00f64fd4d6c45669733dceb9feb073a": "filter_out"
     }
 else:
     clickhouse_host = '???'
