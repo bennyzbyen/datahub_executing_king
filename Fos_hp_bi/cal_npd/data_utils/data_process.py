@@ -312,13 +312,6 @@ class DataProcess:
         result_df_details = self._cal_channel_categories(result_df_details, is_sku=True)
         
         result_df_details[sku_columns] = result_df_details[sku_columns].astype(int)
-        combo_col = 'f10911_f10907'
-        # 计算品客洋葱110g和原味110g二选一达成字段，任一达成则记为1。
-        result_df_details[combo_col] = np.where(
-            (result_df_details['f10911'] == 1) | (result_df_details['f10907'] == 1),
-            1,
-            0
-        )
 
         return result_df_details
 

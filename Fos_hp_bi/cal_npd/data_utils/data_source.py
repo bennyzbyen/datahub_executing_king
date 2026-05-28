@@ -9,6 +9,7 @@ class DataSource:
         self.sku_map = params['sku_map']
         self.sku_columns = list(self.sku_map.keys())
         self.sku_cal_range = params.get('sku_cal_range', None)
+        self.sku_combo_map = params.get('sku_combo_map', {})
         self.APP_KEY = app_key
         self.APP_SECRET = app_secret
         self.FS_ROOT_DIR = fs_root_dir
@@ -101,6 +102,21 @@ class DataSource:
             pass
         return df
 
+    def _expand_source_sku_columns(self, sku_columns: list) -> list:
+        source_sku_columns = []
+        for sku_column in sku_columns:
+            source_sku_columns.extend(self.sku_combo_map.get(sku_column, [sku_column]))
+        return list(dict.fromkeys(source_sku_columns))
+
+    def _add_combo_sku_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        for combo_column, source_columns in self.sku_combo_map.items():
+            for source_column in source_columns:
+                if source_column not in df.columns:
+                    df[source_column] = "0"
+            source_df = df[source_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
+            df[combo_column] = (source_df.sum(axis=1) >= 1).astype(int)
+        return df
+
     def fetch_bysku_df(self)-> pd.DataFrame:
         time_range = self.time_range
         sku_cal_range = self.sku_cal_range
@@ -120,8 +136,12 @@ class DataSource:
             df_sku = pd.DataFrame()
             for fs_file_name in all_fs_file_path:
                 fs_file_path = f"{fs_bysku_dir}/{fs_file_name}"
-                df = self.read_fs_2_df(fs_file_path, fs_file_name, usecols=['code']+sku_list)
+                source_sku_list = self._expand_source_sku_columns(sku_list)
+                df = self.read_fs_2_df(fs_file_path, fs_file_name, usecols=['code']+source_sku_list)
+                df[source_sku_list] = df[source_sku_list].fillna(0)
+                df = self._add_combo_sku_columns(df)
                 df[sku_list] = df[sku_list].fillna(0)
+                df = df[list(dict.fromkeys(['code']+sku_list))]
                 logger.info(f"读取文件{fs_file_path}成功, size: {len(df)}")
                 df_sku = pd.concat([df_sku, df], ignore_index=True)
 
@@ -139,6 +159,7 @@ class DataSource:
         fs_file_name = f"{source_table_name}_{current_period}.{file_type}"
         fs_file_path = f"{fs_bysku_dir}/{fs_file_name}"
         df = self.read_fs_2_df(fs_file_path, fs_file_name)
+        df = self._add_combo_sku_columns(df)
         df[sku_columns] = df[sku_columns].fillna(0)
         logger.info(f"读取文件{fs_file_path}成功, size: {len(df)}")
 
