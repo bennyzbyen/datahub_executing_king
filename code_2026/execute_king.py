@@ -14,6 +14,7 @@ class EXECUTE_KING(object):
         self.ext_table_name = params['ext_table_name']
         self.ext_col_mapping = params.get('ext_col_mapping', None)
         self.ext_table_columns = self.ext_col_mapping.keys()
+        self.store_master_table = params.get('store_master_table', None)
 
         self.ck_op = CLickHouseOperation()
 
@@ -39,8 +40,14 @@ class EXECUTE_KING(object):
         table_list = self.table_list
         table_mapping = self.table_mapping
         column_mapping = self.column_mapping
+        store_master_table = self.store_master_table
         
         df = hbase_op.read_multiple_tables_2_df_multithread(table_names=table_list, columns_map=table_mapping,row_start=period, row_stop=f"{period}Z")
+        if store_master_table:
+            df_store_master = hbase_op.read_hbase_2_df(table_name=store_master_table, columns=table_mapping[store_master_table])
+            if 'rowkey' in df_store_master.columns:
+                df_store_master.drop(columns=['rowkey'], inplace=True)
+            df[store_master_table] = df_store_master
         ######################################################
         # df = {}
         # for table in table_list:
@@ -59,6 +66,13 @@ class EXECUTE_KING(object):
                 "size":f"{len(df[table])}",
             }
             metrics_list.append(metrics)
+        if store_master_table:
+            metrics = {
+                "mysql_table":f"{store_master_table}",
+                "period":f"{period}",
+                "size":f"{len(df[store_master_table])}",
+            }
+            metrics_list.append(metrics)
         return df, metrics_list
     
 
@@ -68,6 +82,21 @@ class EXECUTE_KING(object):
             table_df = df_source[table_name]
             df = pd.merge(df, table_df, on=['period', 'code'], how='left')
         logger.info(f"Finished merging dataframes")
+        return df
+
+
+    def _enrich_store_master_info(self, df:pd.DataFrame, df_store_master:pd.DataFrame)->pd.DataFrame:
+        join_key = 'code'
+        if df_store_master is None or df_store_master.empty:
+            return df
+
+        if join_key not in df.columns:
+            raise KeyError(f"{join_key} not in main dataframe")
+        if join_key not in df_store_master.columns:
+            raise KeyError(f"{join_key} not in store master dataframe")
+
+        df_store_master = df_store_master.drop_duplicates(subset=[join_key])
+        df = pd.merge(df, df_store_master, on=[join_key], how='left')
         return df
     
 
@@ -221,6 +250,7 @@ class EXECUTE_KING(object):
         ext_table_name = self.ext_table_name
         ex_table_columns = self.ext_table_columns
         ext_col_mapping = self.ext_col_mapping
+        store_master_table = self.store_master_table
 
         for period_str in period_list:
             st = datetime.datetime.now()
@@ -241,6 +271,8 @@ class EXECUTE_KING(object):
             ]
             
             df_merge = self._merge_dataframes(main_df, df_source, table_list[1:])
+            if store_master_table:
+                df_merge = self._enrich_store_master_info(df_merge, df_source[store_master_table])
 
             # 计算部分
             df_merge = self._col_calculate(df_merge)
