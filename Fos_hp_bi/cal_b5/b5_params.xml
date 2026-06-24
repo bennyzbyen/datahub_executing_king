@@ -23,7 +23,7 @@
         },
         "sku_ttl_filter": {
             "y9216": ["Hyper", "Super"],
-            "y9402": ["Hyper", "Super", "Mini", "CVS"],
+            "y9402": ["Hyper", "Super"],
             "y9222": ["Non KA MT", "TT"],
             "y10504": ["TT"],
             "y10505": ["TT"],
