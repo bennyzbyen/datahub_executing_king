@@ -44,10 +44,29 @@ class CLickHouseOperation:
     
     def _get_geo_map_data(self):
         """
-        从 ClickHouse 读取地理映射维表。
+        兼容入口：从 HBase 读取地理映射维表。
         包含 before (关联键) 和 current (目标字段)
         """
-        wrapper = ClientWrapper(client_type='clickhouse', clickhouse_token='')
+        try:
+            hbase_op = HBaseOperation()
+            return hbase_op.read_geo_map_data()
+        except Exception as e:
+            logger.error(f"Error fetching geo map data from HBase: {e}")
+            return None
+
+class HBaseOperation:
+    def __init__(self):
+        self.clients = ClientWrapper(client_type='gateway')
+        self.fs_client = self.clients.fs_client
+        self.hbase_client = self.clients.hbase_client
+
+
+    def read_geo_map_data(self):
+        """
+        从 HBase 读取地理映射维表。
+        包含 before (关联键) 和 current (目标字段)
+        """
+        hbase_client = self.hbase_client
         source_cols = [
             'mars_region_code_before', 'mars_province_code_before', 
             'mars_city_cluster_code_before', 'mars_city_code_before',
@@ -56,11 +75,18 @@ class CLickHouseOperation:
             'mars_region_name_current', 'mars_province_name_current', 
             'mars_city_cluster_name_current', 'mars_city_name_current'
         ]
-        query = f"SELECT {', '.join(source_cols)} FROM sv_eo_data.mars_geo_map"
         
         try:
-            logger.info("Fetching mars_geo_map for multi-column enrichment...")
-            df_geo = wrapper.clickhouse_client.query_df(query)
+            logger.info("Fetching l0_manual_master.mars_geo_adj_mapping for multi-column enrichment...")
+            df_geo = hbase_client.query_df(
+                hbase_table_name='l0_manual_master.mars_geo_adj_mapping',
+                columns=source_cols,
+                row_prefixs=None
+            )
+            if df_geo is None:
+                return None
+            if 'rowkey' in df_geo.columns:
+                df_geo = df_geo.drop(columns=['rowkey'])
             
             # 关键：根据关联键去重，防止 Join 爆炸
             join_keys_before = [
@@ -72,12 +98,6 @@ class CLickHouseOperation:
         except Exception as e:
             logger.error(f"Error fetching geo map data: {e}")
             return None
-
-class HBaseOperation:
-    def __init__(self):
-        self.clients = ClientWrapper(client_type='gateway')
-        self.fs_client = self.clients.fs_client
-        self.hbase_client = self.clients.hbase_client
 
 
     def read_hbase_2_df(self, table_name:str, columns:list, row_start:str=None, row_stop:str=None)->pd.DataFrame:

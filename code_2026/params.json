@@ -257,13 +257,5 @@
         "l2_cot_perfect_store.zo_cvs_detail_2026_p", 
         "l2_cot_perfect_store.zo_minijy_detail_2026_p"
     ],
-    "store_master_table": "l0_store_center.store_details",
-    "ext_table_name": "ds_f59ed231_e542_4ce6_bf34_f8bfeb15e774",
-    "ext_col_mapping": {
-        "C_3631c67c97b64bbc819f053e698b058d": "chain_brand_name",
-        "C_bec97e47385a46a7add4d646dc50b18c": "nation_hq_name",
-        "C_b589eefd0b844a7aac1959bbce8f46a2": "city_hq_name",
-        "C_2205d56228034795b96527394e69eab0": "code",
-        "C_850697bae91a49c0a4c1d2ba49f8c944": "period" 
-    }
+    "store_master_table": "l0_store_center.store_details"
 }

@@ -11,9 +11,6 @@ class EXECUTE_KING(object):
         self.table_mapping = params['table_mapping']
         self.column_mapping = params['column_mapping']
         self.table_list = params['source_table_list']
-        self.ext_table_name = params['ext_table_name']
-        self.ext_col_mapping = params.get('ext_col_mapping', None)
-        self.ext_table_columns = self.ext_col_mapping.keys()
         self.store_master_table = params.get('store_master_table', None)
 
         self.ck_op = CLickHouseOperation()
@@ -247,9 +244,6 @@ class EXECUTE_KING(object):
 
     def execute_king(self, period_list:list, metrics_list:list, clickhouse_table:str, output_path:str)->dict:
         table_list = self.table_list
-        ext_table_name = self.ext_table_name
-        ex_table_columns = self.ext_table_columns
-        ext_col_mapping = self.ext_col_mapping
         store_master_table = self.store_master_table
 
         for period_str in period_list:
@@ -282,10 +276,10 @@ class EXECUTE_KING(object):
                 df_merge = self._delete_code(df_merge)
 
             # 剔除客户清单(HS+MC)
-            ext_df = self._fetch_ext_df(ext_table_name, ex_table_columns, ext_col_mapping)
-            logger.info(f"Start calculating blacklist")
-            df_merge = self._calculate_blacklist(df_merge, ext_df)
-            logger.info(f"Finished calculating blacklist")
+            # ext_df = self._fetch_ext_df(ext_table_name, ex_table_columns, ext_col_mapping)
+            # logger.info(f"Start calculating blacklist")
+            # df_merge = self._calculate_blacklist(df_merge, ext_df)
+            # logger.info(f"Finished calculating blacklist")
 
             # 拼接地域信息
             df_geo = self._get_geo_map_data()

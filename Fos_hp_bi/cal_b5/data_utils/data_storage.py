@@ -1,5 +1,5 @@
 from common_utils.all_modules import pd, os, datetime, time, mlpapp, clickhouse_connect, hashlib, GateWayClient, insert_file, logger
-from params_configs.db_config import clickhouse_token, clickhouse_connect_params, cluster
+from params_configs.db_config import app_key, app_secret, clickhouse_token, clickhouse_connect_params, cluster
 
 class DataStorage:
     """
@@ -59,10 +59,11 @@ class DataStorage:
 
     def _get_geo_map_data(self):
         """
-        从 ClickHouse 读取地理映射维表。
+        从 HBase 读取地理映射维表。
         包含 before (关联键) 和 current (目标字段)
         """
-        client = self._get_clickhouse_client('')
+        gateway_client = GateWayClient(app_key, app_secret)
+        hbase_client = gateway_client.getHbaseClient()
         source_cols = [
             'mars_region_code_before', 'mars_province_code_before', 
             'mars_city_cluster_code_before', 'mars_city_code_before',
@@ -71,11 +72,18 @@ class DataStorage:
             'mars_region_name_current', 'mars_province_name_current', 
             'mars_city_cluster_name_current', 'mars_city_name_current'
         ]
-        query = f"SELECT {', '.join(source_cols)} FROM sv_eo_data.mars_geo_map"
         
         try:
-            logger.info("Fetching mars_geo_map for multi-column enrichment...")
-            df_geo = client.query_df(query)
+            logger.info("Fetching l0_manual_master.mars_geo_adj_mapping for multi-column enrichment...")
+            df_geo = hbase_client.query_df(
+                hbase_table_name='l0_manual_master.mars_geo_adj_mapping',
+                columns=source_cols,
+                row_prefixs=None
+            )
+            if df_geo is None:
+                return None
+            if 'rowkey' in df_geo.columns:
+                df_geo = df_geo.drop(columns=['rowkey'])
             
             # 关键：根据关联键去重，防止 Join 爆炸
             join_keys_before = [
